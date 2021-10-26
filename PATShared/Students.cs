@@ -6,20 +6,19 @@ using System.Threading.Tasks;
 
 namespace PATShared
 {
-    public class StudentInfo : ICloneable
+    public class StudentInfo
     {
-        public string Group;
+        public string Group { get; set; }
         // TODO: sth else?
+        public string MoodleToken { get; set; }
 
-        public StudentInfo(string group)
+        // используется для навигации по moodle.
+        public object? Tag { get; set; }
+
+        public StudentInfo(string group = "", string moodletoken = "")
         {
             Group = group;
-        }
-
-        public object Clone()
-        {
-            var _new = new StudentInfo(Group);
-            return _new;
+            MoodleToken = moodletoken;
         }
     }
 
@@ -41,7 +40,7 @@ namespace PATShared
             {
                 lock (LockObject)
                 {
-                    return (StudentInfo)Users[userid].Clone();
+                    return Users[userid];
                 }
             }
             catch
@@ -54,7 +53,7 @@ namespace PATShared
         {
             lock (LockObject)
             {
-                Users[userid] = (StudentInfo)info.Clone();
+                Users[userid] = info;
             }
         }
 
@@ -81,12 +80,13 @@ namespace PATShared
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     if (line.StartsWith('#') || !line.Contains('=')) continue;
 
-                    var kvp = line.Split('=', StringSplitOptions.RemoveEmptyEntries);
+                    var kvp = line.Trim().Split('=');
                     var key = kvp[0];
-                    var values = kvp[1].Split(';', StringSplitOptions.RemoveEmptyEntries);
+                    var values = kvp[1].Split(';');
 
                     Users[key] = new StudentInfo(
-                        (values.Length > 0) ? values[0] : ""
+                        (values.Length > 0) ? values[0] : "",
+                        (values.Length > 1) ? values[1] : ""
                         /*, ...*/
                     );
                 }
@@ -101,16 +101,16 @@ namespace PATShared
             {
                 StringBuilder sb = new StringBuilder();
 
-                sb.AppendFormat("{0}{1}{2}{3}", "# PATSchedule user database, DO NOT EDIT, string format:", "\n", "# {id}_{user}={group};{...}", "\n");
+                sb.AppendFormat("{0}{1}{2}{3}", "# PATSchedule user database, DO NOT EDIT, string format:", "\n", "# {id}_{user}={group};{moodletoken};{...}", "\n");
                 foreach (var kvp in Users)
                 {
-                    sb.AppendFormat("{0}={1};{2}", kvp.Key, kvp.Value.Group, /*, ...*/ "\n");
+                    sb.AppendFormat("{0}={1};{2};{3}", kvp.Key, kvp.Value.Group, kvp.Value.MoodleToken, /*, ... */ "\n");
                 }
 
                 towrite = sb.ToString();
             }
 
-            await File.WriteAllTextAsync(FILEPATH, towrite);
+            await File.WriteAllTextAsync(FILEPATH, towrite, Encoding.UTF8);
         }
     }
 }

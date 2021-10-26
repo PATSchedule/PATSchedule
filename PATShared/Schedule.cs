@@ -14,7 +14,7 @@ namespace PATShared
 {
     public class Schedule
     {
-        static readonly HttpClient client = new HttpClient();
+        public static readonly HttpClient client = new HttpClient();
         static readonly string repl_uri = "https://permaviat.ru/raspisanie-zamen/";
         public static readonly CultureInfo my_culture = new CultureInfo("ru-RU"); // руссиш спарше
 
@@ -55,6 +55,7 @@ namespace PATShared
             public int Para; // номер пары, 1,2,3,4.... 0 если это полная замена (нужно стереть все существующие пары!)
             public string Room; // 'Т-228'
             public string Subject; // 'Информатика (Паренкова А.С.)'
+            public Building MyBuilding;
 
             public SingleReplacement(int _p, string _room, string _subject)
             {
@@ -107,7 +108,7 @@ namespace PATShared
                 Group = Group.Trim().Replace("\r", "").Replace("\n", "");
                 Para = Para.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', ',').Replace('.', ',');
                 Lesson = Lesson.Trim().Replace("\r", "").Replace("\n", "");
-                Room = Room.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', '-');
+                Room = Room.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', '-').ToUpper(my_culture);
 
                 if (Para.EndsWith(',')) Para = Para.TrimEnd(',');
 

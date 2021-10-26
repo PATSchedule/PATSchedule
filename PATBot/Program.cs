@@ -14,6 +14,179 @@ namespace PATBot
         static PATShared.Students Students = new PATShared.Students();
         static CancellationTokenSource Cts = new CancellationTokenSource();
 
+        static ReplyKeyboardRemove RemoveKeyboard = new ReplyKeyboardRemove();
+        static InlineKeyboardButton[][] InlineDateButtons = new InlineKeyboardButton[][] {
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Позавчера", "s-2.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Вчера", "s-1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Сегодня", "s0.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Завтра", "s1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Послезавтра", "s2.0") }
+        };
+        static InlineKeyboardMarkup InlineDateMarkup = new InlineKeyboardMarkup(InlineDateButtons);
+
+        const string NAME_BANNED = "❌ ой ой, вы быть забанен из данный бот во слава великий китай компартия 🇨🇳🇨🇳🇨🇳🇨🇳🇨🇳 лидер xi.";
+        const string NAME_SCHEDULE = "📅 Расписание";
+        const string NAME_HOMEWORK = "💼 Задания";
+        const string NAME_ABOUTBOT = "🐯 О боте";
+        const string NAME_CHANGEGR = "⚙️ Сменить группу";
+
+        static KeyboardButton[][] MenuButtons = new KeyboardButton[][]
+        {
+            new KeyboardButton[]{ NAME_SCHEDULE },
+            new KeyboardButton[]{ NAME_HOMEWORK },
+            new KeyboardButton[]{ NAME_ABOUTBOT },
+            new KeyboardButton[]{ NAME_CHANGEGR }
+        };
+
+        static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons, true, true);
+
+        class EmptyClass { } static readonly EmptyClass Empty = new EmptyClass();
+
+        static InlineKeyboardMarkup MoodleMarkupDelete = new InlineKeyboardMarkup(new InlineKeyboardButton[]
+                {
+                    InlineKeyboardButton.WithCallbackData("❌ Выйти", "m0"),
+                    InlineKeyboardButton.WithCallbackData("➡️", "m1")
+                });
+
+        static InlineKeyboardMarkup MoodleMarkupBoth = new InlineKeyboardMarkup(new InlineKeyboardButton[]
+                {
+                    InlineKeyboardButton.WithCallbackData("⬅️", "m-1"),
+                    InlineKeyboardButton.WithCallbackData("➡️", "m1")
+                });
+
+        static InlineKeyboardMarkup MoodleMarkupLeft = new InlineKeyboardMarkup(new InlineKeyboardButton[]
+                {
+                    InlineKeyboardButton.WithCallbackData("⬅️", "m-1"),
+                    //InlineKeyboardButton.WithCallbackData("➡️", "m1")
+                });
+
+        static InlineKeyboardMarkup MoodleMarkupRight = new InlineKeyboardMarkup(new InlineKeyboardButton[]
+                {
+                    //InlineKeyboardButton.WithCallbackData("⬅️", "m-1"),
+                    InlineKeyboardButton.WithCallbackData("➡️", "m1")
+                });
+
+        class MoodleListTag
+        {
+            public class MoodlePageInfo
+            {
+                public string? contents { get; set; }
+            }
+
+            public int page = -1;
+            public DateTime startfrom = DateTime.Now;
+            public List<MoodlePageInfo> pages = new List<MoodlePageInfo>();
+        }
+
+        static async Task<Tuple<string, InlineKeyboardMarkup?>> PrintMoodleInfo(string moodletoken, string patuserid)
+        {
+            var sb = new StringBuilder();
+            var m = new PATShared.Moodle(PATShared.Schedule.client);
+            InlineKeyboardMarkup? ikm = null;
+
+            try
+            {
+                var userinfo = await m.Request<PATShared.MoodleSiteInfoReply>(
+                    moodletoken,
+                    "core_webservice_get_site_info"
+                );
+
+                var assigninfo = await m.Request<PATShared.MoodleAssignmentsReply>(
+                    moodletoken,
+                    "mod_assign_get_assignments"
+                );
+
+                var patsi = Students.GetUser(patuserid);
+                if (patsi is null)
+                {
+                    throw new InvalidOperationException("User is null..?");
+                }
+
+                var tag = new MoodleListTag();
+
+                sb.AppendLine($"Вы зашли в [{userinfo.sitename}]({userinfo.siteurl})\nкак [{userinfo.firstname}](https://edu.permaviat.ru/user/profile.php?id={userinfo.userid})\nИспользуйте кнопки ниже для навигации по курсам.\n\nДанные актуальны на {tag.startfrom:d}.\nДля выхода из Moodle нажмите на ❌.\nТЕСТ: версия мудл у сайта={userinfo.release}"); 
+
+                var i = 1;
+
+                foreach (var e in assigninfo.courses)
+                {
+                    var j = 0;
+                    var coursename = e.shortname;
+                    var courseurl = $"https://edu.permaviat.ru/course/view.php?id={e.id}";
+
+                    if (e.assignments.Length < 1) continue;
+
+                    var astr = $"Страница {i} из {{0}} (одна страница - один предмет)\n\n";
+                    astr += $"[{coursename}]({courseurl}):\n";
+
+                    foreach (var a in e.assignments)
+                    {
+                        if (a.allowsubmissionsfromdate == 0 || a.duedate == 0) continue;
+
+                        var asubstatus = await m.Request<PATShared.MoodleSubmissionStatus>(moodletoken, "mod_assign_get_submission_status",
+                            $"userid={userinfo.userid}&assignid={a.id}"
+                        );
+
+                        var astat = asubstatus?.lastattempt?.submission?.status;
+                        var asubdat = asubstatus?.lastattempt?.submission?.timecreated;
+                        var adate = "";
+
+                        if (asubdat is long asubdat_)
+                        {
+                            adate = " " + PATShared.Utils.GetLocalFromUnixTime(asubdat_).ToString("d MMM H:m:s", PATShared.Schedule.my_culture);
+                        }
+
+                        var astart = PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate);
+                        //if (tag.startfrom < astart) continue;
+
+                        var aurl = $"https://edu.permaviat.ru/mod/assign/view.php?id={a.cmid}";
+                        var aname = a.name;
+                        var adt = PATShared.Utils.GetLocalFromUnixTime(a.duedate);
+                        var abegins = " " + PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate).ToString("d MMM", PATShared.Schedule.my_culture);
+                        var adts = " " + adt.ToString("d MMM", PATShared.Schedule.my_culture);
+
+                        astr += $" - [{aname}]({aurl}), ";
+
+                        if (astat is null || astat == "new")
+                            astr += $"⏰ сдать до{adts}!";
+                        else
+                            astr += $"✅ уже сдано{adate}.";
+
+                        if (tag.startfrom < astart)
+                            astr += $" (откроется{abegins})";
+
+                        astr += "\n";
+
+                        ++j;
+                    }
+
+                    if (j > 0)
+                    {
+                        tag.pages.Add(new MoodleListTag.MoodlePageInfo() { contents = astr });
+                        ++i;
+                    }
+                }
+
+                ikm = MoodleMarkupDelete;
+
+                patsi.Tag = tag;
+                Students.SetUser(patuserid, patsi);
+
+            }
+            catch (Exception exc)
+            {
+                sb.AppendLine("❌ Произошла ошибка получения данных из Moodle:\n" + exc.ToString());
+            }
+
+            return Tuple.Create(sb.ToString(), ikm);
+        }
+
+        static void FixConsole()
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            Console.InputEncoding = Encoding.UTF8;
+        }
+
         static async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
             var msg = "";
@@ -34,243 +207,470 @@ namespace PATBot
             await Console.Error.WriteLineAsync(msg);
         }
 
-        static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+        static async Task HandleUpdateMyChatMemberAsync(ITelegramBotClient botClient, ChatMemberUpdated upd, CancellationToken cancellationToken)
         {
-            try
+            var stat = upd.NewChatMember.Status;
+            var deluserid = "TG_" + upd.From.Id.ToString();
+
+            if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
             {
-                var removekbd = new ReplyKeyboardRemove();
-                var replyButtons = new KeyboardButton[] { "Расписание", "Сменить группу", "О боте" };
-                var dateButtons = new InlineKeyboardButton[][] {
-                    new InlineKeyboardButton[] { "Позавчера" },
-                    new InlineKeyboardButton[] { "Вчера" },
-                    new InlineKeyboardButton[] { "Сегодня" },
-                    new InlineKeyboardButton[] { "Завтра" },
-                    new InlineKeyboardButton[] { "Послезавтра" }
-                };
+                Students.DelUser(deluserid);
+                await Students.Save();
 
-                IReplyMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup(replyButtons, true);
-                var dateKeyboardMarkup = new InlineKeyboardMarkup(dateButtons);
+                Console.WriteLine($"User deregistered: {deluserid}");
+            }
+            else
+            {
+                Console.WriteLine($"User started dialog: {deluserid}");
+            }
+        }
 
-                if (update.Type == UpdateType.MyChatMember)
+        static async Task HandleUpdateCallbackQueryAsync(ITelegramBotClient botClient, CallbackQuery upd, CancellationToken cancellationToken)
+        {
+            var cberr = false;
+            var msg = "Ошибка: ";
+            var cbuserid = "TG_" + upd.From.Id.ToString();
+            var chatId = upd.Message.Chat.Id;
+            var msgId = upd.Message.MessageId;
+            var mydt = DateTime.Today;
+
+            if (cbuserid == "TG_1094694175")
+            {
+                await botClient.SendTextMessageAsync(chatId, NAME_BANNED);
+                return;
+            }
+
+            var myuser = Students.GetUser(cbuserid);
+            var imr = InlineDateMarkup;
+
+            if (myuser is null)
+            {
+                cberr = true;
+                msg += "Пользователь не найден. ";
+            }
+
+            var mystr = upd.Data;
+            if (!cberr && mystr.StartsWith('s'))
+            {
+                mystr = mystr.Substring(1);
+
+                switch (mystr)
                 {
-                    var stat = update.MyChatMember.NewChatMember.Status;
-                    var deluserid = "TG_" + update.MyChatMember.From.Id.ToString();
-
-                    if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
-                    {
-
-                        Students.DelUser(deluserid);
-                        await Students.Save();
-
-                        Console.WriteLine($"User deregistered: {deluserid}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"User started dialog: {deluserid}");
-                    }
-                }
-
-                if (update.Type == UpdateType.CallbackQuery)
-                {
-                    var cberr = false;
-                    var msg = "Ошибка: ";
-                    var cbuserid = "TG_" + update.CallbackQuery.From.Id.ToString();
-                    var mydt = DateTime.Today;
-
-                    if (cbuserid == "TG_1094694175")
-                    {
-                        await botClient.SendTextMessageAsync(update.CallbackQuery.Message.Chat.Id, "ой ой, вы быть забанен из данный бот во слава великий китай компартия.");
-                        return;
-                    }
-
-                    var mystr = update.CallbackQuery.Data.ToLower(PATShared.Schedule.my_culture).Trim().Replace(".", "");
-                    switch (mystr)
-                    {
-                        case "вчера": mydt = mydt.AddDays(-1.0); break;
-                        case "позавчера": mydt = mydt.AddDays(-2.0); break;
-                        case "завтра": mydt = mydt.AddDays(1.0); break;
-                        case "послезавтра": mydt = mydt.AddDays(2.0); break;
-                        case "сегодня": break;
-                        default:
-                            {
-                                cberr = true;
-                                msg += "Неверно указан день. ";
-                                break;
-                            }
-                    }
-
-                    if (mydt.DayOfWeek == DayOfWeek.Sunday)
-                    {
-                        cberr = true;
-                        msg += "Не могу показать расписание на воскресенье. ";
-                    }
-
-                    if (!cberr)
-                    {
-                        var cmysch = new PATShared.Schedule();
-                        await cmysch.FetchSchedule(mydt);
-
-                        var myuser = Students.GetUser(cbuserid);
-                        if (myuser is null)
+                    case "-1.0": mydt = mydt.AddDays(-1.0); break;
+                    case "-2.0": mydt = mydt.AddDays(-2.0); break;
+                    case "1.0": mydt = mydt.AddDays(1.0); break;
+                    case "2.0": mydt = mydt.AddDays(2.0); break;
+                    case "0.0": break;
+                    default:
                         {
                             cberr = true;
-                            msg += "Не могу найти пользователя. ";
+                            msg += "Неверно указан день. ";
+                            break;
                         }
-                        else
-                        {
-                            msg = $"Расписание для группы {myuser.Group} на {mydt:d MMMM yyyy}:\n";
-                            var mysch = cmysch.GetScheduleForGroup(myuser.Group);
-
-                            if (mysch is null)
-                            {
-                                msg += "- Нет расписания, попробуй поменять день или группу.";
-                            }
-                            else
-                                foreach (var par in mysch)
-                                {
-                                    msg += par.ToString() + "\n";
-                                }
-                        }
-                    }
-
-                    msg += "\nДанные актуальны на " + DateTime.Now.ToLongDateString() + " " + DateTime.Now.ToLongTimeString();
-
-                    await botClient.EditMessageTextAsync(
-                        chatId: update.CallbackQuery.Message.Chat.Id,
-                        messageId: update.CallbackQuery.Message.MessageId,
-                        text: msg,
-                        replyMarkup: dateKeyboardMarkup,
-                        cancellationToken: cancellationToken
-                    );
-
-                    await botClient.AnswerCallbackQueryAsync(
-                        update.CallbackQuery.Id,
-                        cancellationToken: cancellationToken
-                    );
                 }
 
-                if (update.Type != UpdateType.Message)
-                    return;
-
-                if (update.Message.Type != MessageType.Text)
-                    return;
-
-                var chatId = update.Message.Chat.Id;
-                var chatTxt = update.Message.Text;
-                var patuserid = "TG_" + chatId.ToString();
-
-                if (patuserid == "TG_1094694175")
+                if (mydt.DayOfWeek == DayOfWeek.Sunday)
                 {
-                    await botClient.SendTextMessageAsync(chatId, "ой ой, вы быть забанен из данный бот во слава великий китай компартия.");
-                    return;
+                    cberr = true;
+                    msg += "Не могу показать расписание на воскресенье. ";
                 }
 
-                if (Students.GetUser(patuserid) is PATShared.StudentInfo patsi)
+                if (!cberr)
                 {
-                    // здесь мы получаем группу...
-                    if (patsi.Group == "")
+                    var cmysch = new PATShared.Schedule();
+                    await cmysch.FetchSchedule(mydt);
+                    
+                    if (myuser is null)
                     {
-                        var mygroup = chatTxt.Trim().Replace(' ', '-').Replace(".", "").ToUpper(PATShared.Schedule.my_culture);
-                        var msg = $"Твоя группа: {mygroup}\nЧто вас интересует?";
-
-                        // TODO: проверить название группы на правильность...
-                        var parts = mygroup.Split('-', StringSplitOptions.RemoveEmptyEntries);
-                        var validgroup =
-                            parts.Length == 3
-                            && parts[0].Length == 2
-                            && parts[1].Length == 2
-                            && parts[2].Length == 1
-                            && uint.TryParse(parts[1], out uint _p1)
-                            && uint.TryParse(parts[2], out uint _p2)
-                            && _p1 > 0
-                            && _p2 > 0;
-
-                        if (validgroup)
-                        {
-                            Students.SetUser(patuserid, new PATShared.StudentInfo(mygroup));
-                            await Students.Save();
-                        }
-                        else
-                        {
-                            msg = "Группа введена некорректно. Попробуй ещё раз.";
-                            replyKeyboardMarkup = removekbd;
-                        }
-
-                        await botClient.SendTextMessageAsync(
-                            chatId: chatId,
-                            text: msg,
-                            cancellationToken: cancellationToken,
-                            replyMarkup: replyKeyboardMarkup
-                        );
+                        cberr = true;
+                        msg += "Не могу найти пользователя. ";
                     }
                     else
                     {
-                        // надо отправить сообщение.
-                        string? msg;
-                        switch (chatTxt)
+                        msg = $"📅 Расписание для группы {myuser.Group} на {mydt:d MMMM yyyy}:\n";
+                        var mysch = cmysch.GetScheduleForGroup(myuser.Group);
+
+                        var appnd = "";
+
+                        if (mysch is null)
                         {
-                            case "О боте":
-                                {
-                                    msg = "Это глупый бот который набросал @nikthecat из группы МХ-21-2.\nО всех проблемах писать тоже ему. (или бить, легонько)";
-                                    break;
-                                }
-
-                            case "Сменить группу":
-                                {
-                                    msg = $"Твоя текущая группа: {patsi.Group}\nПришли новую группу одним сообщением, как раньше.";
-                                    Students.SetUser(patuserid, new PATShared.StudentInfo(""));
-                                    replyKeyboardMarkup = removekbd;
-                                    break;
-                                }
-
-                            case "Расписание":
-                                {
-                                    msg = "На какой день показать?\nПока можно только кнопками снизу:";
-
-                                    replyKeyboardMarkup = dateKeyboardMarkup;
-
-                                    break;
-                                }
-
-                            default:
-                                {
-                                    msg = "Прости, я просто милый плюшевый тигр, я тебя не понимаю... хотя очень бы хотел...";
-                                    break;
-                                }
+                            msg += "- Нет расписания, попробуй поменять день или группу.";
                         }
+                        else
+                        {
+                            var suffixes = new List<string>();
+                            var si = 0;
+                            var lastb = PATShared.Building.UNKNOWN;
+                            var hassport = mysch.Any(a => a.Room.Trim().ToLower(PATShared.Schedule.my_culture) == "спортзал");
 
-                        await botClient.SendTextMessageAsync(
-                            chatId: chatId,
-                            text: msg,
-                            cancellationToken: cancellationToken,
-                            replyMarkup: replyKeyboardMarkup
-                        );
+                            var prep = " ⏰ ";
+
+                            for (si = 0; si < mysch.Count; ++si)
+                            {
+                                if (mysch[si].CanIgnore()) continue;
+
+                                if (mysch[si].Para == 0)
+                                {
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.UNKNOWN)[0]);
+                                    appnd = "(практика)";
+                                }
+                                else if (mydt.DayOfWeek == DayOfWeek.Saturday)
+                                {
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.SUB)[mysch[si].Para - 1]);
+                                    appnd = "(субботнее расписание звонков)";
+                                }
+                                else if (mysch[si].Room.ToLower(PATShared.Schedule.my_culture) == "спортзал" || mysch[si].Room == "")
+                                {
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A1)[mysch[si].Para - 1]);
+                                    appnd = "(спортзал, предполагаю А 1 этаж)";
+                                    hassport = true;
+                                }
+                                else
+                                {
+                                    switch (mysch[si].Room[0])
+                                    {
+                                        case 'С':
+                                            {
+                                                suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.C)[mysch[si].Para - 1]);
+                                                appnd = "(строительный корпус)";
+                                                break;
+                                            }
+
+                                        case 'Т':
+                                            {
+                                                var cabnum = int.Parse(mysch[si].Room.Split('-')[1]);
+                                                if (cabnum % 2 == 0)
+                                                {
+                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.T1)[mysch[si].Para - 1]);
+                                                    appnd = "(корпус Т чёт)";
+                                                }
+                                                else
+                                                {
+                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.T2)[mysch[si].Para - 1]);
+                                                    appnd = "(корпус Т нечёт)";
+                                                }
+
+                                                break;
+                                            }
+
+                                        case 'А':
+                                            {
+                                                var cabfloor = mysch[si].Room.Split('-')[1][0];
+
+                                                // если в расписании есть спортзал, то 1 этаж...
+                                                if (hassport) cabfloor = '1';
+
+                                                switch (cabfloor)
+                                                {
+                                                    case '1':
+                                                        {
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A1)[mysch[si].Para - 1]);
+                                                            appnd = "(А 1 этаж)";
+                                                            break;
+                                                        }
+
+                                                    case '2':
+                                                        {
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A2)[mysch[si].Para - 1]);
+                                                            appnd = "(А 2 этаж)";
+                                                            break;
+                                                        }
+
+                                                    case '3':
+                                                        {
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A3)[mysch[si].Para - 1]);
+                                                            appnd = "(А 3 этаж)";
+                                                            break;
+                                                        }
+                                                }
+
+                                                break;
+                                            }
+                                    }
+                                }
+                            }
+
+                            si = 0;
+                            foreach (var par in mysch)
+                            {
+                                if (par.CanIgnore()) continue;
+                                msg += par.ToString().Trim() + suffixes[si++] + "\n";
+                            }
+
+                            msg += appnd;
+                        }
                     }
+                }
+
+                var dtnow = DateTime.Now;
+                msg += "\nДанные актуальны на " + dtnow.ToLongDateString() + " " + dtnow.ToLongTimeString();
+            }
+            else if (!cberr && mystr.StartsWith('m'))
+            {
+                imr = null;
+                mystr = mystr.Substring(1);
+
+                var mdir = int.Parse(mystr);
+                if (mdir == 0)
+                {
+                    myuser.MoodleToken = "";
+                    msg = "Ваши данные авторизации Moodle были удалены. Нажмите ещё раз на кнопку 'Задания' для авторизации.";
+
+                    Students.SetUser(cbuserid, myuser);
+                    await Students.Save();
                 }
                 else
                 {
-                    var msg = "Привет! Я не знаю твою группу. Можешь отправить её одним сообщением? Если она содержит дробь, то отправлять нужно БЕЗ неё. (как в расписании)\nПример: МХ-21-2\nили ЛП-21-1";
-                    Students.SetUser(patuserid, new PATShared.StudentInfo(""));
+                    var mtag = (MoodleListTag?)myuser.Tag;
+
+                    if (mtag is MoodleListTag)
+                    {
+                        mtag.page += mdir;
+
+                        if (mtag.page >= mtag.pages.Count) mtag.page = mtag.pages.Count - 1;
+                        if (mtag.page < 0) mtag.page = 0;
+
+                        msg = string.Format(mtag.pages[mtag.page].contents, mtag.pages.Count);
+
+                        imr = MoodleMarkupBoth;
+                        if (mtag.page < 1) imr = MoodleMarkupRight;
+                        else if (mtag.page >= mtag.pages.Count - 1) imr = MoodleMarkupLeft;
+                    }
+                    else
+                    {
+                        cberr = true;
+                        msg += "Нет данных Moodle. o_O ";
+                    }
+                }
+            }
+
+            await botClient.EditMessageTextAsync(
+                chatId: chatId,
+                messageId: msgId,
+                text: msg,
+                parseMode: ParseMode.Markdown,
+                replyMarkup: imr,
+                cancellationToken: cancellationToken
+            );
+
+            await botClient.AnswerCallbackQueryAsync(
+                upd.Id,
+                cancellationToken: cancellationToken
+            );
+        }
+
+        static async Task HandleOnMessageAsync(ITelegramBotClient botClient, Message upd, CancellationToken cancellationToken)
+        {
+            IReplyMarkup? replyKeyboardMarkup = MenuMarkup;
+            var chatId = upd.Chat.Id;
+            var patuserid = "TG_" + chatId.ToString();
+
+            if (patuserid == "TG_1094694175")
+            {
+                await botClient.SendTextMessageAsync(chatId, NAME_BANNED);
+                return;
+            }
+
+            if (upd.Type != MessageType.Text)
+            {
+                await botClient.SendTextMessageAsync(chatId, "Прости, пока я понимаю только текст, но если тигр будет прилежно учиться, тигр будет понимать и стикеры!", cancellationToken: cancellationToken);
+                return;
+            }
+            
+            var chatTxt = upd.Text;
+
+            if (Students.GetUser(patuserid) is PATShared.StudentInfo patsi)
+            {
+                // здесь мы получаем группу...
+                if (patsi.Group == "")
+                {
+                    var mygroup = chatTxt.Trim().Replace(' ', '-').Replace(".", "").ToUpper(PATShared.Schedule.my_culture);
+                    var msg = $"Твоя группа: {mygroup}\nЧто вас интересует?";
+
+                    // TODO: проверить название группы на правильность...
+                    var parts = mygroup.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                    var validgroup =
+                        parts.Length == 3
+                        && parts[0].Length == 2
+                        && parts[1].Length == 2
+                        && parts[2].Length == 1
+                        && ushort.TryParse(parts[1], out ushort _p1)
+                        && ushort.TryParse(parts[2], out ushort _p2)
+                        && _p1 > 0
+                        && _p2 > 0;
+
+                    if (validgroup)
+                    {
+                        Students.SetUser(patuserid, new PATShared.StudentInfo(mygroup));
+                        await Students.Save();
+                    }
+                    else
+                    {
+                        msg = "Группа введена некорректно. Попробуй ещё раз.";
+                        replyKeyboardMarkup = RemoveKeyboard;
+                    }
+
                     await botClient.SendTextMessageAsync(
                         chatId: chatId,
                         text: msg,
                         cancellationToken: cancellationToken,
-                        replyMarkup: removekbd
+                        replyMarkup: replyKeyboardMarkup
                     );
+                }
+                else
+                {
+                    // надо отправить сообщение.
+                    string? msg;
+                    var sendout = true;
+                    switch (chatTxt)
+                    {
+                        case NAME_ABOUTBOT:
+                            {
+                                msg = "Это глупый бот, который набросал @nikthecat из группы МХ-21-2.\nО всех проблемах писать тоже ему. (или бить, легонько)\nБот написан на C#, вертится на личном компе сабжа, исходный код доступен [по ссылке](https://github.com/PATSchedule/PATSchedule).\n\n(да, аватарка это мой плюшевый тигр, мне он нраица и менять НЕ БУДУ!!!)";
+                                break;
+                            }
 
-                    Console.WriteLine($"Initial dialog with: {update.Message.Chat.Username}");
+                        case NAME_CHANGEGR:
+                            {
+                                msg = $"Твоя текущая группа: {patsi.Group}\nПришли новую группу одним сообщением, как раньше.";
+                                Students.SetUser(patuserid, new PATShared.StudentInfo(""));
+                                replyKeyboardMarkup = RemoveKeyboard;
+                                break;
+                            }
+
+                        case NAME_HOMEWORK:
+                            {
+                                if (patsi.MoodleToken == "" || patsi.MoodleToken == "$!WAIT")
+                                {
+                                    msg = "Вы не авторизованы в Moodle, пришлите ваш логин и пароль от edu.permaviat.ru одним сообщением через пробел.\nПример:\nAD-21-1-10@permaviat.ru AbCdEfGh1234Ijk";
+                                    patsi.MoodleToken = "$!WAIT";
+                                    Students.SetUser(patuserid, patsi);
+                                }
+                                else
+                                {
+                                    sendout = false;
+
+                                    var _msgwait = await botClient.SendTextMessageAsync(
+                                        chatId: chatId,
+                                        text: "⏲ Подождите пожалуйста, связываюсь с Moodle...",
+                                        cancellationToken: cancellationToken
+                                    );
+
+                                    var tt = await PrintMoodleInfo(patsi.MoodleToken, patuserid);
+                                    msg = tt.Item1;
+
+                                    await botClient.EditMessageTextAsync(
+                                        _msgwait.Chat.Id,
+                                        _msgwait.MessageId,
+                                        text: msg,
+                                        parseMode: ParseMode.Markdown,
+                                        replyMarkup: tt.Item2,
+                                        cancellationToken: cancellationToken
+                                    );
+                                }
+
+                                break;
+                            }
+
+                        case NAME_SCHEDULE:
+                            {
+                                msg = "На какой день показать?\nПока можно только кнопками снизу:";
+                                replyKeyboardMarkup = InlineDateMarkup;
+                                break;
+                            }
+
+                        default:
+                            {
+                                if (patsi.MoodleToken == "$!WAIT")
+                                {
+                                    try
+                                    {
+                                        var mmessage = chatTxt.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                                        if (mmessage.Length != 2)
+                                        {
+                                            throw new InvalidOperationException("Нет либо логина, либо пароля.");
+                                        }
+
+                                        var mc = new PATShared.Moodle(PATShared.Schedule.client);
+                                        var mresult = await mc.LoginNew(mmessage[0], mmessage[1]);
+
+                                        patsi.MoodleToken = mresult;
+                                        Students.SetUser(patuserid, patsi);
+                                        await Students.Save();
+
+                                        msg = "✅ Вы авторизованы успешно, удалите сообщение с логином и паролем и нажмите на кнопку ещё раз. Если вы остановите диалог с ботом то ваши данные авторизации будут удалены.";
+                                    }
+                                    catch (Exception exc)
+                                    {
+                                        msg = $"❌ Произошла ошибка авторизации Moodle, свяжитесь с автором бота:\n{exc}";
+                                    }
+                                }
+                                else
+                                msg = "Прости, я просто милый плюшевый тигр, я тебя не понимаю... хотя очень бы хотел...";
+
+                                break;
+                            }
+                    }
+
+                    if (sendout)
+                    await botClient.SendTextMessageAsync(
+                        chatId: chatId,
+                        text: msg,
+                        parseMode: ParseMode.Markdown,
+                        cancellationToken: cancellationToken,
+                        replyMarkup: replyKeyboardMarkup
+                    );
+                }
+            }
+            else
+            {
+                var msg = "Привет! 👋\nЯ не знаю твою группу. Можешь отправить её одним сообщением? Если она содержит дробь, то отправлять нужно БЕЗ неё, как в расписании.\nПример: МХ-21-2\nили ЛП-21-1";
+                Students.SetUser(patuserid, new PATShared.StudentInfo(""));
+                await botClient.SendTextMessageAsync(
+                    chatId: chatId,
+                    text: msg,
+                    cancellationToken: cancellationToken,
+                    replyMarkup: RemoveKeyboard
+                );
+
+                Console.WriteLine($"Initial dialog with: {upd.Chat.Username}");
+            }
+        }
+
+        static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+        {
+            try
+            {
+                switch (update.Type)
+                {
+                    case UpdateType.MyChatMember:
+                        {
+                            await HandleUpdateMyChatMemberAsync(botClient, update.MyChatMember, cancellationToken);
+                            break;
+                        }
+
+                    case UpdateType.CallbackQuery:
+                        {
+                            await HandleUpdateCallbackQueryAsync(botClient, update.CallbackQuery, cancellationToken);
+                            break;
+                        }
+
+                    case UpdateType.Message:
+                        {
+                            await HandleOnMessageAsync(botClient, update.Message, cancellationToken);
+                            break;
+                        }
                 }
             }
             catch (Exception exc)
             {
-                Console.Error.WriteLine(exc);
+                await HandleErrorAsync(botClient, exc, cancellationToken);
             }
         }
 
         public static async Task Main()
         {
-            Console.OutputEncoding = Encoding.UTF8;
-            Console.InputEncoding = Encoding.UTF8;
+            FixConsole();
 
             var mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN");
             if (string.IsNullOrWhiteSpace(mytgtoken))
@@ -281,7 +681,7 @@ namespace PATBot
 
             await Students.Load();
 
-            var botClient = new TelegramBotClient(mytgtoken);
+            var botClient = new TelegramBotClient(mytgtoken, PATShared.Schedule.client);
             var me = await botClient.GetMeAsync(Cts.Token);
 
             Console.WriteLine("PATSchedule/TG info:");
