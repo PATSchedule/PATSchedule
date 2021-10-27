@@ -102,17 +102,27 @@ namespace PATBot
                     throw new InvalidOperationException("User is null..?");
                 }
 
+                if (assigninfo is null || assigninfo.courses is null || assigninfo.courses.Length < 1)
+                {
+                    throw new InvalidOperationException("Assignments block is null.");
+                }
+
                 var tag = new MoodleListTag();
 
-                sb.AppendLine($"Вы зашли в [{userinfo.sitename}]({userinfo.siteurl})\nкак [{userinfo.firstname}](https://edu.permaviat.ru/user/profile.php?id={userinfo.userid})\nИспользуйте кнопки ниже для навигации по курсам.\n\nДанные актуальны на {tag.startfrom:d}.\nДля выхода из Moodle нажмите на ❌.\nТЕСТ: версия мудл у сайта={userinfo.release}"); 
+                sb.AppendLine($"Вы зашли в [{userinfo.sitename}]({userinfo.siteurl})\nкак [{userinfo.firstname}]({userinfo.siteurl}/user/profile.php?id={userinfo.userid})\nИспользуйте кнопки ниже для навигации по курсам.\n\nДанные актуальны на {tag.startfrom:d}.\nДля выхода из Moodle нажмите на ❌.\nТЕСТ: версия мудл у сайта={userinfo.release}"); 
 
                 var i = 1;
 
                 foreach (var e in assigninfo.courses)
                 {
+                    if (e is null || e.assignments is null)
+                    {
+                        throw new InvalidOperationException("Course block is null.");
+                    }
+
                     var j = 0;
                     var coursename = e.shortname;
-                    var courseurl = $"https://edu.permaviat.ru/course/view.php?id={e.id}";
+                    var courseurl = $"{userinfo.siteurl}/course/view.php?id={e.id}";
 
                     if (e.assignments.Length < 1) continue;
 
@@ -122,38 +132,42 @@ namespace PATBot
                     foreach (var a in e.assignments)
                     {
                         if (a.allowsubmissionsfromdate == 0 || a.duedate == 0) continue;
+                        var astart = PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate);
+                        if (tag.startfrom < astart) continue;
 
                         var asubstatus = await m.Request<PATShared.MoodleSubmissionStatus>(moodletoken, "mod_assign_get_submission_status",
                             $"userid={userinfo.userid}&assignid={a.id}"
                         );
 
-                        var astat = asubstatus?.lastattempt?.submission?.status;
-                        var asubdat = asubstatus?.lastattempt?.submission?.timecreated;
+                        if (asubstatus is null || asubstatus.lastattempt is null || asubstatus.lastattempt.submission is null)
+                        {
+                            throw new InvalidOperationException("Submission status is null.");
+                        }
+
+                        var astat = asubstatus.lastattempt.submission.status;
+                        var asubdat = Math.Max(asubstatus.lastattempt.submission.timemodified, asubstatus.lastattempt.submission.timecreated);
                         var adate = "";
 
                         if (asubdat is long asubdat_)
                         {
-                            adate = " " + PATShared.Utils.GetLocalFromUnixTime(asubdat_).ToString("d MMM H:m:s", PATShared.Schedule.my_culture);
+                            adate = PATShared.Utils.GetLocalFromUnixTime(asubdat_).ToString("d MMM HH:mm:ss", PATShared.Schedule.my_culture);
                         }
 
-                        var astart = PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate);
-                        //if (tag.startfrom < astart) continue;
-
-                        var aurl = $"https://edu.permaviat.ru/mod/assign/view.php?id={a.cmid}";
+                        var aurl = $"{userinfo.siteurl}/mod/assign/view.php?id={a.cmid}";
                         var aname = a.name;
                         var adt = PATShared.Utils.GetLocalFromUnixTime(a.duedate);
-                        var abegins = " " + PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate).ToString("d MMM", PATShared.Schedule.my_culture);
-                        var adts = " " + adt.ToString("d MMM", PATShared.Schedule.my_culture);
+                        var abegins = PATShared.Utils.GetLocalFromUnixTime(a.allowsubmissionsfromdate).ToString("d MMM HH:mm:ss", PATShared.Schedule.my_culture);
+                        var adts = adt.ToString("d MMM HH:mm:ss", PATShared.Schedule.my_culture);
 
                         astr += $" - [{aname}]({aurl}), ";
 
                         if (astat is null || astat == "new")
-                            astr += $"⏰ сдать до{adts}!";
+                            astr += $"⏰ сдать до {adts}!";
                         else
-                            astr += $"✅ уже сдано{adate}.";
+                            astr += $"✅ уже сдано {adate}.";
 
                         if (tag.startfrom < astart)
-                            astr += $" (откроется{abegins})";
+                            astr += $" (откроется {abegins})";
 
                         astr += "\n";
 

@@ -313,16 +313,7 @@ namespace PATShared
 
         public async Task<string> LoginNew(string username, string password)
         {
-            using var content = new FormUrlEncodedContent(
-                new KeyValuePair<string, string>[]
-                {
-                    new KeyValuePair<string, string>("username", username),
-                    new KeyValuePair<string, string>("password", password),
-                    new KeyValuePair<string, string>("service", serviceName)
-                }
-            );
-
-            var resp = await client.PostAsync($"{baseUrl}/login/token.php", content);
+            var resp = await client.GetAsync($"{baseUrl}/login/token.php?service={serviceName}&username={username}&password={password}", HttpCompletionOption.ResponseContentRead);
             if (resp is null)
             {
                 throw new MoodleException("Login failed, reply is null, check your HttpClient instance.");

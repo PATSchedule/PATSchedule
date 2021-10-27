@@ -135,16 +135,15 @@ namespace PATShared
             }
         }
 
-        static DateTime MyLocalEpoch => new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Local);
-
         public static DateTime GetLocalFromUnixTime(long seconds)
         {
-            return MyLocalEpoch.AddSeconds(seconds);
-        }
-
-        public static long GetLocalUnixTime()
-        {
-            return DateTime.Now.Subtract(MyLocalEpoch).Seconds;
+            /*
+            // секунды -> .NETовые тики
+            long _ticks = seconds * TimeSpan.TicksPerSecond;
+            // unix тики + мудл время
+            return new DateTime(MyUnixTicks + _ticks, DateTimeKind.Utc).ToLocalTime();
+            */
+            return DateTimeOffset.FromUnixTimeSeconds(seconds).LocalDateTime;
         }
     }
 }

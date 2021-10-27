@@ -348,7 +348,7 @@ namespace PATShared
                     string? txt = cell.CellValue?.Text;
                     if (txt is null)
                     {
-                        int a = 0;
+                        
                     }
 
                     ++x;
