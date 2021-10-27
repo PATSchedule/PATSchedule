@@ -30,6 +30,16 @@ namespace PATBot
         const string NAME_ABOUTBOT = "🐯 О боте";
         const string NAME_CHANGEGR = "⚙️ Сменить группу";
 
+        // 'Just Zoo It!' pack:
+        const string NAME_PIGSTICKER = "CAACAgIAAxkBAAICfWF5bV4fOwncaPA-UIRE36ze22LnAALoAAP0exkAAcnMJRAtN9vTIQQ";
+        static string[] NAME_CATSTICKERS = new string[]
+        {
+            "CAACAgIAAxkBAAICg2F5bz83bppeNgWEHvJwyc38Od0yAALgAAP0exkAASzrKFdeleMwIQQ",
+            "CAACAgIAAxkBAAIChWF5b2NOdVV0-TmACnL-KAmb62F0AAL4AAP0exkAAQtRF3q3XTjpIQQ",
+            "CAACAgIAAxkBAAICh2F5b3vxeL4zu2beyPqsTPSnGwwQAAMBAAL0exkAAfRksArkn456IQQ",
+            "CAACAgIAAxkBAAICiWF5b54h0kNnRH69lL_NB0j6OHx7AAIRAQAC9HsZAAH1nz_2mMhZ0CEE"
+        };
+
         static KeyboardButton[][] MenuButtons = new KeyboardButton[][]
         {
             new KeyboardButton[]{ NAME_SCHEDULE },
@@ -37,6 +47,8 @@ namespace PATBot
             new KeyboardButton[]{ NAME_ABOUTBOT },
             new KeyboardButton[]{ NAME_CHANGEGR }
         };
+
+        static Random Rnd = new Random();
 
         static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons, true, true);
 
@@ -241,6 +253,7 @@ namespace PATBot
 
         static async Task HandleUpdateCallbackQueryAsync(ITelegramBotClient botClient, CallbackQuery upd, CancellationToken cancellationToken)
         {
+            Rnd.Next();
             var cberr = false;
             var msg = "Ошибка: ";
             var cbuserid = "TG_" + upd.From.Id.ToString();
@@ -534,7 +547,7 @@ namespace PATBot
                 else
                 {
                     // надо отправить сообщение.
-                    string? msg;
+                    string msg = "ошибка";
                     var sendout = true;
                     switch (chatTxt)
                     {
@@ -590,6 +603,44 @@ namespace PATBot
                             {
                                 msg = "На какой день показать?\nПока можно только кнопками снизу:";
                                 replyKeyboardMarkup = InlineDateMarkup;
+                                break;
+                            }
+
+                        case "pig":
+                        case "пиг":
+                        case "hru":
+                        case "hrue":
+                        case "хрю":
+                        case "hruxe":
+                        case "хрюха":
+                            {
+                                sendout = false;
+
+                                await botClient.SendStickerAsync(
+                                    chatId: chatId,
+                                    sticker: new Telegram.Bot.Types.InputFiles.InputOnlineFile(NAME_PIGSTICKER),
+                                    cancellationToken: cancellationToken,
+                                    disableNotification: true
+                                );
+
+                                break;
+                            }
+
+                        case "cat":
+                        case "кот":
+                        case "meow":
+                        case "мяу":
+                        case "кися":
+                            {
+                                sendout = false;
+
+                                await botClient.SendStickerAsync(
+                                    chatId: chatId,
+                                    sticker: new Telegram.Bot.Types.InputFiles.InputOnlineFile(NAME_CATSTICKERS[Rnd.Next(0, NAME_CATSTICKERS.Length)]),
+                                    cancellationToken: cancellationToken,
+                                    disableNotification: true
+                                );
+
                                 break;
                             }
 
