@@ -1,5 +1,11 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Extensions.Polling;
@@ -317,7 +323,7 @@ namespace PATBot
                         msg = $"📅 Расписание для группы {myuser.Group} на {mydt:d MMMM yyyy}:\n";
                         var mysch = cmysch.GetScheduleForGroup(myuser.Group);
 
-                        var appnd = "";
+                        var appnd = "\n";
 
                         if (mysch is null)
                         {
@@ -415,6 +421,11 @@ namespace PATBot
                                             }
                                     }
                                 }
+                            }
+
+                            if (cmysch.ReplacementsUsed)
+                            {
+                                appnd += "\n\nЗамены применены из: " + cmysch.ReplacementFile;
                             }
 
                             si = 0;
@@ -737,7 +748,17 @@ namespace PATBot
         {
             FixConsole();
 
-            var mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN");
+            var mytgtoken = "";
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN", EnvironmentVariableTarget.Machine);
+            }
+            else
+            {
+                mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN", EnvironmentVariableTarget.Process);
+            }
+
             if (string.IsNullOrWhiteSpace(mytgtoken))
             {
                 Console.Error.WriteLine("TG Token is not set. Please set the PATSCHEDULE_TG_TOKEN environment variable.");
@@ -759,7 +780,7 @@ namespace PATBot
 
             botClient.StartReceiving(new DefaultUpdateHandler(HandleUpdateAsync, HandleErrorAsync), Cts.Token);
 
-            await Task.Delay(-1);
+            await Task.Delay(-1, Cts.Token);
         }
     }
 }

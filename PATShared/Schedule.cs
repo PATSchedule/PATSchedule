@@ -21,6 +21,9 @@ namespace PATShared
 
         IDictionary<string, IList<SingleReplacement>> MySchedule;
 
+        public bool ReplacementsUsed = false;
+        public string ReplacementFile = "";
+
         public Schedule()
         {
             MySchedule = new Dictionary<string, IList<SingleReplacement>>();
@@ -425,11 +428,13 @@ namespace PATShared
 
             var files = document.GetElementsByClassName("file_tree")[0].GetElementsByClassName("file_link");
 
+            ReplacementsUsed = false;
+
             foreach (var e in files)
             {
-                foreach (var ee in e.Children)
+                foreach (var ee in e.Children.Reverse())
                 {
-                    foreach (var eee in ee.Children)
+                    foreach (var eee in ee.Children.Reverse())
                     {
                         if (eee is IHtmlAnchorElement ihae)
                         {
@@ -444,6 +449,8 @@ namespace PATShared
                             // скачиваем замену:
                             var replacement = await FetchOne(actualurl);
                             MySchedule = Merge(MySchedule, replacement);
+                            ReplacementsUsed = true;
+                            ReplacementFile = new Uri(actualurl).Segments.Last();
 
                             return;
                         }
