@@ -419,13 +419,20 @@ namespace PATBot
 
                                                 break;
                                             }
+
+                                        default:
+                                            {
+                                                suffixes.Add(prep + " 🤷");
+                                                appnd = "(неизвестное расписание звонков)";
+                                                break;
+                                            }
                                     }
                                 }
                             }
 
                             if (cmysch.ReplacementsUsed)
                             {
-                                appnd += "\n\nЗамены применены из: " + cmysch.ReplacementFile;
+                                appnd += $"\n\nЗамены применены из: [{cmysch.ReplacementFile}]({cmysch.ReplacementUrl})";
                             }
 
                             si = 0;

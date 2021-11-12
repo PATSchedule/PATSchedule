@@ -22,6 +22,7 @@ namespace PATShared
         IDictionary<string, IList<SingleReplacement>> MySchedule;
 
         public bool ReplacementsUsed = false;
+        public string ReplacementUrl = "";
         public string ReplacementFile = "";
 
         public Schedule()
@@ -450,7 +451,8 @@ namespace PATShared
                             var replacement = await FetchOne(actualurl);
                             MySchedule = Merge(MySchedule, replacement);
                             ReplacementsUsed = true;
-                            ReplacementFile = new Uri(actualurl).Segments.Last();
+                            ReplacementUrl = actualurl;
+                            ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
 
                             return;
                         }
