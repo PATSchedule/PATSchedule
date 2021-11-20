@@ -327,13 +327,13 @@ namespace PATShared
             var json = await resp.Content.ReadAsStringAsync();
             if (string.IsNullOrWhiteSpace(json))
             {
-                throw new MoodleException($"Login failed, reply is empty.");
+                throw new MoodleException($"Login failed, reply is empty. {resp.ReasonPhrase}");
             }
 
             var reply = JsonConvert.DeserializeObject<MoodleLoginReply>(json);
-            if (reply.token is null)
+            if (reply is null || reply.token is null)
             {
-                throw new MoodleException($"Login failed, token error, {reply.error} {reply.errorcode}");
+                throw new MoodleException($"Login failed, token error, {reply?.error} {reply?.errorcode}");
             }
 
             return reply.token;

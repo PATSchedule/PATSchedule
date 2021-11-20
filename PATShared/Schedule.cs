@@ -81,11 +81,11 @@ namespace PATShared
 
             public override string ToString()
             {
-                var pref = Para > 0 ? (" " + Para.ToString()) : "";
+                var pref = Para > 0 ? (Para.ToString() + ":") : "";
                 var suff = Subject;
                 if (Room != "") suff += " " + Room;
 
-                return $"Пара{pref}: {suff}";
+                return $"{pref} {suff}";
             }
         }
 
@@ -371,6 +371,7 @@ namespace PATShared
             var json = await client.GetStringAsync("https://raw.githubusercontent.com/PATSchedule/BaseSchedule/main/Schedule.json");
 
             var jsonsch = JsonBaseSchedule.Parse(json);
+            if (jsonsch is null) return;
 
             MySchedule.Clear();
 
@@ -415,51 +416,54 @@ namespace PATShared
 
         public async Task FetchSchedule(DateTime origindate)
         {
-            await FetchExcels(origindate); // fetch base schedule
-
-            var bcfg = Configuration.Default
-                .WithDefaultLoader()
-                .WithDefaultCookies()
-                .WithMetaRefresh()
-                .WithLocaleBasedEncoding()
-                .WithCulture(my_culture);
-
-            using var context = BrowsingContext.New(bcfg);
-            using var document = await context.OpenAsync(repl_uri);
-
-            var files = document.GetElementsByClassName("file_tree")[0].GetElementsByClassName("file_link");
-
-            ReplacementsUsed = false;
-
-            foreach (var e in files)
+            try
             {
-                foreach (var ee in e.Children.Reverse())
+                await FetchExcels(origindate); // fetch base schedule
+
+                var bcfg = Configuration.Default
+                    .WithDefaultLoader()
+                    .WithDefaultCookies()
+                    .WithMetaRefresh()
+                    .WithLocaleBasedEncoding()
+                    .WithCulture(my_culture);
+
+                using var context = BrowsingContext.New(bcfg);
+                using var document = await context.OpenAsync(repl_uri);
+
+                var files = document.GetElementsByClassName("file_tree")[0].GetElementsByClassName("file_link");
+
+                ReplacementsUsed = false;
+
+                foreach (var e in files)
                 {
-                    foreach (var eee in ee.Children.Reverse())
+                    foreach (var ee in e.Children.Reverse())
                     {
-                        if (eee is IHtmlAnchorElement ihae)
+                        foreach (var eee in ee.Children.Reverse())
                         {
-                            // href относителен, и AngleSharp думает что оно на локалхост указывает...
-                            var actualurl = ihae.Href.Replace("http://localhost", "https://permaviat.ru");
-                            var date = ParseName(ihae.Text);
+                            if (eee is IHtmlAnchorElement ihae)
+                            {
+                                // href относителен, и AngleSharp думает что оно на локалхост указывает...
+                                var actualurl = ihae.Href.Replace("http://localhost", "https://permaviat.ru");
+                                var date = ParseName(ihae.Text);
 
-                            // пару раз там учебная часть выложила замены в .PDF
-                            if (!actualurl.EndsWith(".docx")) continue;
-                            if (DateTime.Compare(date, origindate) != 0) continue;
+                                // пару раз там учебная часть выложила замены в .PDF
+                                if (!actualurl.EndsWith(".docx")) continue;
+                                if (DateTime.Compare(date, origindate) != 0) continue;
 
-                            // скачиваем замену:
-                            var replacement = await FetchOne(actualurl);
-                            MySchedule = Merge(MySchedule, replacement);
-                            ReplacementsUsed = true;
-                            ReplacementUrl = actualurl;
-                            ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
+                                // скачиваем замену:
+                                var replacement = await FetchOne(actualurl);
+                                MySchedule = Merge(MySchedule, replacement);
+                                ReplacementsUsed = true;
+                                ReplacementUrl = actualurl;
+                                ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
 
-                            return;
+                                return;
+                            }
                         }
                     }
                 }
             }
-
+            catch { }
         }
     }
 }

@@ -17,8 +17,8 @@ namespace PATBot
 {
     public static class Program
     {
-        static PATShared.Students Students = new PATShared.Students();
         static CancellationTokenSource Cts = new CancellationTokenSource();
+        static PATShared.Students Students = new PATShared.Students();
 
         static ReplyKeyboardRemove RemoveKeyboard = new ReplyKeyboardRemove();
         static InlineKeyboardButton[][] InlineDateButtons = new InlineKeyboardButton[][] {
@@ -247,8 +247,6 @@ namespace PATBot
             if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
             {
                 Students.DelUser(deluserid);
-                await Students.Save();
-
                 Console.WriteLine($"User deregistered: {deluserid}");
             }
             else
@@ -327,7 +325,7 @@ namespace PATBot
 
                         if (mysch is null)
                         {
-                            msg += "- Нет расписания, попробуй поменять день или группу.";
+                            msg += "- Ошибка, попробуй поменять группу или просто попробуй ещё раз.";
                         }
                         else
                         {
@@ -434,6 +432,10 @@ namespace PATBot
                             {
                                 appnd += $"\n\nЗамены применены из: [{cmysch.ReplacementFile}]({cmysch.ReplacementUrl})";
                             }
+                            else
+                            {
+                                appnd += "\n";
+                            }
 
                             si = 0;
                             foreach (var par in mysch)
@@ -459,10 +461,9 @@ namespace PATBot
                 if (mdir == 0)
                 {
                     myuser.MoodleToken = "";
-                    msg = "Ваши данные авторизации Moodle были удалены. Нажмите ещё раз на кнопку 'Задания' для авторизации.";
-
                     Students.SetUser(cbuserid, myuser);
-                    await Students.Save();
+
+                    msg = "Ваши данные авторизации Moodle были удалены. Нажмите ещё раз на кнопку 'Задания' для авторизации.";
                 }
                 else
                 {
@@ -547,7 +548,6 @@ namespace PATBot
                     if (validgroup)
                     {
                         Students.SetUser(patuserid, new PATShared.StudentInfo(mygroup));
-                        await Students.Save();
                     }
                     else
                     {
@@ -679,7 +679,6 @@ namespace PATBot
 
                                         patsi.MoodleToken = mresult;
                                         Students.SetUser(patuserid, patsi);
-                                        await Students.Save();
 
                                         msg = "✅ Вы авторизованы успешно, удалите сообщение с логином и паролем и нажмите на кнопку ещё раз. Если вы остановите диалог с ботом то ваши данные авторизации будут удалены.";
                                     }
@@ -756,14 +755,17 @@ namespace PATBot
             FixConsole();
 
             var mytgtoken = "";
+            var myvktoken = "";
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN", EnvironmentVariableTarget.Machine);
+                myvktoken = Environment.GetEnvironmentVariable("PATSCHEDULE_VK_TOKEN", EnvironmentVariableTarget.Machine);
             }
             else
             {
                 mytgtoken = Environment.GetEnvironmentVariable("PATSCHEDULE_TG_TOKEN", EnvironmentVariableTarget.Process);
+                myvktoken = Environment.GetEnvironmentVariable("PATSCHEDULE_VK_TOKEN", EnvironmentVariableTarget.Process);
             }
 
             if (string.IsNullOrWhiteSpace(mytgtoken))
@@ -772,15 +774,25 @@ namespace PATBot
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(myvktoken))
+            {
+                Console.WriteLine("VK API Token is not set. This is a warning, bot will run in TG mode only.");
+            }
+
             await Students.Load();
+            Students.RunSaveTask(Cts.Token);
 
             var botClient = new TelegramBotClient(mytgtoken, PATShared.Schedule.client);
             var me = await botClient.GetMeAsync(Cts.Token);
 
             Console.WriteLine("PATSchedule/TG info:");
-            Console.WriteLine($"Username: @{me.Username}");
-            Console.WriteLine($"Id:       {me.Id}");
-            Console.WriteLine($"Name:     '{me.FirstName}'");
+            Console.WriteLine($"Username:         @{me.Username}");
+            Console.WriteLine($"Id:               {me.Id}");
+            Console.WriteLine($"Name:             '{me.FirstName} {me.LastName}'");
+            Console.WriteLine($"Can join groups?  {me.CanJoinGroups}");
+            Console.WriteLine($"Can read all msg? {me.CanReadAllGroupMessages}");
+            Console.WriteLine($"Inline queries?   {me.SupportsInlineQueries}");
+            Console.WriteLine($"Am I a bot?       {me.IsBot}");
             Console.WriteLine();
 
             Console.WriteLine("Listening...");

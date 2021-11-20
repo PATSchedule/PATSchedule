@@ -19,9 +19,17 @@ namespace PATShared
         public IDictionary<string, JsonBaseScheduleLesson[][]> Data { get; set; } = new Dictionary<string, JsonBaseScheduleLesson[][]>();
         public string? Note { get; set; } = "";
 
-        public static JsonBaseSchedule Parse(string thejson)
+        public static JsonBaseSchedule? Parse(string thejson)
         {
-            return JsonConvert.DeserializeObject<JsonBaseSchedule>(thejson);
+            try
+            {
+                return JsonConvert.DeserializeObject<JsonBaseSchedule>(thejson);
+            }
+            catch
+            {
+                Console.WriteLine("Failed to parse the BaseSchedule json.");
+                return null;
+            }
         }
     }
 }

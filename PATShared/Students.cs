@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PATShared
@@ -20,18 +21,63 @@ namespace PATShared
             Group = group;
             MoodleToken = moodletoken;
         }
+
+        public StudentInfo(StudentInfo _other)
+        {
+            Group = _other.Group;
+            MoodleToken = _other.MoodleToken;
+            Tag = _other.Tag;
+        }
     }
 
     public class Students
     {
+        static readonly int SAVETIME = 15 * 1000;
         static readonly string FILEPATH = "db.txt";
         IDictionary<string, StudentInfo> Users;
         object LockObject;
+        bool IsDirty;
+
 
         public Students()
         {
+            IsDirty = false;
             Users = new Dictionary<string, StudentInfo>();
             LockObject = new object();
+        }
+
+        private async Task SaveTask(object octs)
+        {
+            CancellationToken cts = (CancellationToken)octs;
+
+            Console.WriteLine("Entering db save thread...");
+
+            while (true)
+            {
+                if (cts.IsCancellationRequested) return;
+                await Task.Delay(SAVETIME);
+                string towrite = "# An error had occurred when saving the database!\n";
+
+                lock (LockObject)
+                {
+                    if (!IsDirty) continue;
+
+                    StringBuilder sb = new StringBuilder();
+
+                    sb.AppendFormat("{0}{1}{2}{3}", "# PATSchedule user database, DO NOT EDIT, string format:", "\n", "# {id}_{user}={group};{moodletoken};{...}", "\n");
+                    foreach (var kvp in Users)
+                    {
+                        sb.AppendFormat("{0}={1};{2};{3}", kvp.Key, kvp.Value.Group, kvp.Value.MoodleToken, /*, ... */ "\n");
+                    }
+
+                    towrite = sb.ToString();
+
+                    Console.WriteLine($"Saving database at {DateTime.Now:G}...");
+                    IsDirty = false;
+                }
+
+                await File.WriteAllTextAsync(FILEPATH, towrite, Encoding.UTF8);
+            }
         }
 
         public StudentInfo? GetUser(string userid)
@@ -54,22 +100,44 @@ namespace PATShared
             lock (LockObject)
             {
                 Users[userid] = info;
+                IsDirty = true;
             }
         }
 
-        public void DelUser(string userid)
+        public bool DelUser(string userid)
         {
             lock (LockObject)
             {
-                Users.Remove(userid);
+                IsDirty = true;
+                return Users.Remove(userid);
             }
+        }
+
+        public void RunSaveTask(CancellationToken cts)
+        {
+            Task.Factory.StartNew(SaveTask, cts);
         }
 
         public async Task Load()
         {
-            if (!File.Exists(FILEPATH)) return;
+            var lines = new string[0];
 
-            var lines = await File.ReadAllLinesAsync(FILEPATH, Encoding.UTF8);
+            try
+            {
+                if (!File.Exists(FILEPATH))
+                {
+                    Console.WriteLine("Database file does not exist. Will start empty.");
+                    return;
+                }
+
+                lines = await File.ReadAllLinesAsync(FILEPATH, Encoding.UTF8);
+            }
+            catch (Exception exc)
+            {
+                Console.WriteLine("Unable to read the database file:");
+                Console.WriteLine(exc.ToString());
+                Console.WriteLine("-- will start without a database. o_O");
+            }
 
             lock (LockObject)
             {
@@ -90,27 +158,9 @@ namespace PATShared
                         /*, ...*/
                     );
                 }
+
+                IsDirty = false;
             }
-        }
-
-        public async Task Save()
-        {
-            string towrite = "";
-
-            lock (LockObject)
-            {
-                StringBuilder sb = new StringBuilder();
-
-                sb.AppendFormat("{0}{1}{2}{3}", "# PATSchedule user database, DO NOT EDIT, string format:", "\n", "# {id}_{user}={group};{moodletoken};{...}", "\n");
-                foreach (var kvp in Users)
-                {
-                    sb.AppendFormat("{0}={1};{2};{3}", kvp.Key, kvp.Value.Group, kvp.Value.MoodleToken, /*, ... */ "\n");
-                }
-
-                towrite = sb.ToString();
-            }
-
-            await File.WriteAllTextAsync(FILEPATH, towrite, Encoding.UTF8);
         }
     }
 }

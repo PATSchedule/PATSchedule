@@ -86,7 +86,7 @@ namespace PATShared
         static string[] T2 = new string[] { "8:30 - 9:55", "10:05 - 12:00", "12:05 - 13:25", "13:35 - 15:00", "15:40 - 17:05", "17:10 - 18:35", "18:35 - ..." };
         static string[] SUB = new string[] { "8:30 - 9:55", "10:05 - 11:30", "11:40 - 13:05", "13:15 - 14:40", "14:50 - 16:15", "16:25 - 17:50", "17:50 - ..." };
         static string[] P1 = new string[] { "8:30 - 9:30", "9:40 - 10:40", "10:50 - 11:50", "12:00 - 13:00", "13:10 - 14:10", "14:20 - 15:20", "15:30 - 16:30" };
-        static string[] UNK = new string[] { "8:30 - ...", "ОШИБКА" };
+        static string[] UNK = new string[] { "8:30 - ...", "ОШИБКА", "ОШИБКА 2", "ОШИБКА 3", "ОШИБКА 4" };
 
         public static string[] FetchClockSchedule(Building b)
         {
