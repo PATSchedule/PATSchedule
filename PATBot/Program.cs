@@ -247,11 +247,11 @@ namespace PATBot
             if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
             {
                 Students.DelUser(deluserid);
-                Console.WriteLine($"User deregistered: {deluserid}");
+                await Console.Out.WriteLineAsync($"User deregistered: {deluserid}, @{upd.NewChatMember.User.Username}");
             }
             else
             {
-                Console.WriteLine($"User started dialog: {deluserid}");
+                await Console.Out.WriteLineAsync($"User started dialog: {deluserid}, @{upd.NewChatMember.User.Username}");
             }
         }
 
@@ -274,14 +274,14 @@ namespace PATBot
             var myuser = Students.GetUser(cbuserid);
             var imr = InlineDateMarkup;
 
+            var mystr = upd.Data;
+
             if (myuser is null)
             {
                 cberr = true;
                 msg += "Пользователь не найден. ";
             }
-
-            var mystr = upd.Data;
-            if (!cberr && mystr.StartsWith('s'))
+            else if (!cberr && mystr.StartsWith('s'))
             {
                 mystr = mystr.Substring(1);
 
@@ -331,7 +331,7 @@ namespace PATBot
                         {
                             var suffixes = new List<string>();
                             var si = 0;
-                            var lastb = PATShared.Building.UNKNOWN;
+                            //var lastb = PATShared.Building.UNKNOWN;
                             var hassport = mysch.Any(a => a.Room.Trim().ToLower(PATShared.Schedule.my_culture) == "спортзал");
 
                             var prep = " ⏰ ";
@@ -342,17 +342,17 @@ namespace PATBot
 
                                 if (mysch[si].Para == 0)
                                 {
-                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.UNKNOWN)[0]);
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.UNKNOWN)[0]);
                                     appnd = "(практика)";
                                 }
                                 else if (mydt.DayOfWeek == DayOfWeek.Saturday)
                                 {
-                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.SUB)[mysch[si].Para - 1]);
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.SUB)[mysch[si].Para - 1]);
                                     appnd = "(субботнее расписание звонков)";
                                 }
                                 else if (mysch[si].Room.ToLower(PATShared.Schedule.my_culture) == "спортзал" || mysch[si].Room == "")
                                 {
-                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A1)[mysch[si].Para - 1]);
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.A1)[mysch[si].Para - 1]);
                                     appnd = "(спортзал, предполагаю А 1 этаж)";
                                     hassport = true;
                                 }
@@ -362,7 +362,7 @@ namespace PATBot
                                     {
                                         case 'С':
                                             {
-                                                suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.C)[mysch[si].Para - 1]);
+                                                suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.C)[mysch[si].Para - 1]);
                                                 appnd = "(строительный корпус)";
                                                 break;
                                             }
@@ -372,12 +372,12 @@ namespace PATBot
                                                 var cabnum = int.Parse(mysch[si].Room.Split('-')[1]);
                                                 if (cabnum % 2 == 0)
                                                 {
-                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.T1)[mysch[si].Para - 1]);
+                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.T1)[mysch[si].Para - 1]);
                                                     appnd = "(корпус Т чёт)";
                                                 }
                                                 else
                                                 {
-                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.T2)[mysch[si].Para - 1]);
+                                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.T2)[mysch[si].Para - 1]);
                                                     appnd = "(корпус Т нечёт)";
                                                 }
 
@@ -395,21 +395,21 @@ namespace PATBot
                                                 {
                                                     case '1':
                                                         {
-                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A1)[mysch[si].Para - 1]);
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.A1)[mysch[si].Para - 1]);
                                                             appnd = "(А 1 этаж)";
                                                             break;
                                                         }
 
                                                     case '2':
                                                         {
-                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A2)[mysch[si].Para - 1]);
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.A2)[mysch[si].Para - 1]);
                                                             appnd = "(А 2 этаж)";
                                                             break;
                                                         }
 
                                                     case '3':
                                                         {
-                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule(lastb = PATShared.Building.A3)[mysch[si].Para - 1]);
+                                                            suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.A3)[mysch[si].Para - 1]);
                                                             appnd = "(А 3 этаж)";
                                                             break;
                                                         }
@@ -476,7 +476,7 @@ namespace PATBot
                         if (mtag.page >= mtag.pages.Count) mtag.page = mtag.pages.Count - 1;
                         if (mtag.page < 0) mtag.page = 0;
 
-                        msg = string.Format(mtag.pages[mtag.page].contents, mtag.pages.Count);
+                        msg = string.Format(mtag.pages[mtag.page].contents ?? "ОШИБКА {0} ОШИБКА", mtag.pages.Count);
 
                         imr = MoodleMarkupBoth;
                         if (mtag.page < 1) imr = MoodleMarkupRight;

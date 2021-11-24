@@ -321,6 +321,7 @@ namespace PATShared
             return d;
         }
 
+        /*
         async Task<IDictionary<string, IList<SingleReplacement>>> FetchExcel(string url)
         {
             using var _xlsx = await client.GetStreamAsync(url);
@@ -365,6 +366,7 @@ namespace PATShared
 
             return d;
         }
+        */
 
         async Task FetchExcels(DateTime origindate)
         {
