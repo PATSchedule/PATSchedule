@@ -159,7 +159,8 @@ namespace PATBot
 
                         if (asubstatus is null || asubstatus.lastattempt is null || asubstatus.lastattempt.submission is null)
                         {
-                            throw new InvalidOperationException("Submission status is null.");
+                            //throw new InvalidOperationException("Submission status is null.");
+                            continue;
                         }
 
                         var astat = asubstatus.lastattempt.submission.status;
