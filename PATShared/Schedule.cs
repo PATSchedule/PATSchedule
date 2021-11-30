@@ -110,7 +110,8 @@ namespace PATShared
                 // оаоаоа разное написание аудиторий (то "С 308" то "С-308")
                 // про названия пар я вообще молчу (почему иногда фамилии преподавателей с МАЛЕНЬКОЙ БУКВЫ пишите????)
                 Group = Group.Trim().Replace("\r", "").Replace("\n", "");
-                Para = Para.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', ',').Replace('.', ',');
+                Para = new string(Para.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', ',').Replace('.', ',')
+                    .Where(x => char.IsDigit(x) || x == ',').ToArray());
                 Lesson = Lesson.Trim().Replace("\r", "").Replace("\n", "");
                 Room = Room.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', '-').ToUpper(my_culture);
 
@@ -309,17 +310,6 @@ namespace PATShared
             {
                 if (!d.ContainsKey(lines[i].Group))
                     d[lines[i].Group] = new List<SingleReplacement>();
-
-                // учебная часть и нормально составленные замены это как я и хорошие оценки
-                // никогда вместе не получаются ;)
-                lines[i].Para = new string(
-                    lines[i].Para
-                    // в строчку с номером пары пускать только числа и точко-запятые... (пунткуация)
-                    .Where(x => char.IsDigit(x) || char.IsPunctuation(x) || char.IsWhiteSpace(x))
-                    // в шарпе строчки не изменяются так что нужно на каждый чих создавать новую
-                    // C# moment ;-;
-                    .ToArray()
-                    ).Trim();
 
                 if (!int.TryParse(lines[i].Para, NumberStyles.Integer, my_culture, out int _parnum))
                 {
