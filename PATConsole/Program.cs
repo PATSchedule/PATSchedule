@@ -12,27 +12,11 @@ try
     Console.OutputEncoding = Encoding.UTF8;
     Console.InputEncoding = Encoding.UTF8;
 
-    var m = new PATShared.Moodle();
+    var m = new PATShared.Schedule();
+    await m.FetchSchedule(new DateTime(2021, 12, 1, 0, 0, 0, 0));
+    var asdasdsa = m.GetScheduleForGroup("МХ-21-2");
 
-    const string mUSERNAME = "[redacted]@permaviat.ru";
-    const string mPASSWORD = "[redacted]";
-
-    // делаем логин
-    var mtoken = await m.LoginNew(mUSERNAME, mPASSWORD);
-
-
-    /*
-    var eventsinfo = await m.Request<JObject>(
-                mtoken,
-                "core_calendar_get_action_events_by_timesort",
-                new { timesortfrom = (int)PATShared.Utils.GetLocalUnixTime(), limittononsuspendedevents = true }
-            );
-    */
-    var asubstatus = await m.Request<JObject>(mtoken, "mod_assign_get_submission_status",
-                            "userid=2281&assignid=1032"
-    );
-
-    Console.WriteLine(asubstatus);
+    Console.WriteLine(asdasdsa);
     
     Console.ReadKey(true);
 

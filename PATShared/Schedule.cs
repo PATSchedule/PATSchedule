@@ -310,9 +310,20 @@ namespace PATShared
                 if (!d.ContainsKey(lines[i].Group))
                     d[lines[i].Group] = new List<SingleReplacement>();
 
+                // учебная часть и нормально составленные замены это как я и хорошие оценки
+                // никогда вместе не получаются ;)
+                lines[i].Para = new string(
+                    lines[i].Para
+                    // в строчку с номером пары пускать только числа и точко-запятые... (пунткуация)
+                    .Where(x => char.IsDigit(x) || char.IsPunctuation(x) || char.IsWhiteSpace(x))
+                    // в шарпе строчки не изменяются так что нужно на каждый чих создавать новую
+                    // C# moment ;-;
+                    .ToArray()
+                    ).Trim();
+
                 if (!int.TryParse(lines[i].Para, NumberStyles.Integer, my_culture, out int _parnum))
                 {
-                    throw new InvalidOperationException("wtf?");
+                    throw new InvalidOperationException("Номер пары не верен, вините учебную часть...");
                 }
 
                 d[lines[i].Group].Add(new SingleReplacement(_parnum, lines[i].Room, lines[i].Lesson));
