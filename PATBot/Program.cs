@@ -58,8 +58,6 @@ namespace PATBot
 
         static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons, true, true);
 
-        class EmptyClass { } static readonly EmptyClass Empty = new EmptyClass();
-
         static InlineKeyboardMarkup MoodleMarkupDelete = new InlineKeyboardMarkup(new InlineKeyboardButton[]
                 {
                     InlineKeyboardButton.WithCallbackData("❌ Выйти", "m0"),
@@ -247,6 +245,7 @@ namespace PATBot
 
             if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
             {
+                if (cancellationToken.IsCancellationRequested) return;
                 Students.DelUser(deluserid);
                 await Console.Out.WriteLineAsync($"User deregistered: {deluserid}, @{upd.NewChatMember.User.Username}");
             }
@@ -268,7 +267,7 @@ namespace PATBot
 
             if (cbuserid == "TG_1094694175")
             {
-                await botClient.SendTextMessageAsync(chatId, NAME_BANNED);
+                await botClient.SendTextMessageAsync(chatId, NAME_BANNED, cancellationToken: cancellationToken);
                 return;
             }
 
@@ -343,7 +342,7 @@ namespace PATBot
 
                                 if (mysch[si].Para == 0)
                                 {
-                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.UNKNOWN)[0]);
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.UNK)[0]);
                                     appnd = "(практика)";
                                 }
                                 else if (mydt.DayOfWeek == DayOfWeek.Saturday)
@@ -514,7 +513,7 @@ namespace PATBot
 
             if (patuserid == "TG_1094694175")
             {
-                await botClient.SendTextMessageAsync(chatId, NAME_BANNED);
+                await botClient.SendTextMessageAsync(chatId, NAME_BANNED, cancellationToken: cancellationToken);
                 return;
             }
 
@@ -781,6 +780,10 @@ namespace PATBot
             }
 
             await Students.Load();
+
+            Console.WriteLine("Downloading clock schedule...");
+            await PATShared.Utils.DownloadClockSchedule(PATShared.Schedule.client, Cts.Token);
+
             Students.RunSaveTask(Cts.Token);
 
             var botClient = new TelegramBotClient(mytgtoken, PATShared.Schedule.client);

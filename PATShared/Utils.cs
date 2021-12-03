@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PATShared
 {
@@ -16,7 +19,7 @@ namespace PATShared
         /// <summary>
         /// Корпус С, эквивалентно А1.
         /// </summary>
-        C = A1,
+        C,
         /// <summary>
         /// Корпус А 2 этаж
         /// </summary>
@@ -44,7 +47,7 @@ namespace PATShared
         /// <summary>
         /// Практика...?
         /// </summary>
-        UNKNOWN
+        UNK
     }
 
     public static class Utils
@@ -79,23 +82,77 @@ namespace PATShared
             return false;
         }
 
-        static string[] A1C = new string[] { "8:30 - 9:55", "10:15 - 11:40", "11:50 - 13:15", "13:35 - 15:00", "15:20 - 16:45", "16:50 - 18:15", "18:15 - ..." };
-        static string[] A2 = new string[] { "8:30 - 9:55", "10:05 - 11:30", "11:50 - 13:15", "13:35 - 15:00", "15:20 - 16:45", "16:50 - 18:15", "18:15 - ..." };
-        static string[] A3 = new string[] { "8:30 - 9:55", "10:05 - 11:45", "11:50 - 13:15", "13:35 - 15:00", "15:20 - 16:45", "16:50 - 18:15", "18:15 - ..." };
-        static string[] T1 = new string[] { "8:30 - 9:55", "10:40 - 12:00", "12:05 - 13:25", "13:35 - 15:00", "15:40 - 17:05", "17:10 - 18:35", "18:35 - ..." };
-        static string[] T2 = new string[] { "8:30 - 9:55", "10:05 - 12:00", "12:05 - 13:25", "13:35 - 15:00", "15:40 - 17:05", "17:10 - 18:35", "18:35 - ..." };
-        static string[] SUB = new string[] { "8:30 - 9:55", "10:05 - 11:30", "11:40 - 13:05", "13:15 - 14:40", "14:50 - 16:15", "16:25 - 17:50", "17:50 - ..." };
-        static string[] P1 = new string[] { "8:30 - 9:30", "9:40 - 10:40", "10:50 - 11:50", "12:00 - 13:00", "13:10 - 14:10", "14:20 - 15:20", "15:30 - 16:30" };
-        static string[] UNK = new string[] { "8:30 - ...", "ОШИБКА", "ОШИБКА 2", "ОШИБКА 3", "ОШИБКА 4" };
+        static string[] A1 = new string[0];
+        static string[] C = new string[0];
+        static string[] A2 = new string[0];
+        static string[] A3 = new string[0];
+        static string[] T1 = new string[0];
+        static string[] T2 = new string[0];
+        static string[] SUB = new string[0];
+        static string[] P1 = new string[0];
+        static string[] UNK = new string[0];
+
+        public static async Task DownloadClockSchedule(HttpClient hc, CancellationToken cts)
+        {
+            try
+            {
+                string callscheduleurl = "https://raw.githubusercontent.com/PATSchedule/BaseSchedule/main/CallSchedule.json";
+
+                if (cts.IsCancellationRequested) return;
+
+                string thejson = await hc.GetStringAsync(callscheduleurl);
+
+                if (cts.IsCancellationRequested) return;
+
+                var json = JsonCallSchedule.Parse(thejson);
+
+                if (json is null
+                    || json.Data.A1 is null
+                    || json.Data.C is null
+                    || json.Data.A2 is null
+                    || json.Data.A3 is null
+                    || json.Data.T1 is null
+                    || json.Data.T2 is null
+                    || json.Data.SUB is null
+                    || json.Data.P1 is null
+                    || json.Data.UNK is null)
+                {
+                    if (cts.IsCancellationRequested) return;
+                    throw new InvalidOperationException("Invalid operation, json object is null or Data is null.");
+                }
+
+                if (cts.IsCancellationRequested) return;
+
+                A1 = json.Data.A1;
+                C = json.Data.C;
+                A2 = json.Data.A2;
+                A3 = json.Data.A3;
+                T1 = json.Data.T1;
+                T2 = json.Data.T2;
+                SUB = json.Data.SUB;
+                P1 = json.Data.P1;
+                UNK = json.Data.UNK;
+
+                // we're done here!
+            }
+            catch
+            {
+                await Console.Error.WriteLineAsync("Failed to parse CallSchedule json :(");
+            }
+        }
 
         public static string[] FetchClockSchedule(Building b)
         {
             switch (b)
             {
                 case Building.A1:
-                //case Building.C:
                     {
-                        return A1C;
+                        return A1;
+                    }
+
+                case Building.C:
+                    {
+                        return C;
                     }
 
                 case Building.A2:
