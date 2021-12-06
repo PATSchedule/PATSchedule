@@ -662,6 +662,12 @@ namespace PATBot
                                 break;
                             }
 
+                        case "/start":
+                            {
+                                msg = $"Твоя текущая группа: {patsi.Group}.\nЕё можно сменить в меню.";
+                                break;
+                            }
+
                         default:
                             {
                                 if (patsi.MoodleToken == "$!WAIT")
