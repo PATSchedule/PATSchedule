@@ -318,7 +318,7 @@ namespace PATBot
                     }
                     else
                     {
-                        msg = $"📅 Расписание для группы {myuser.Group} на {mydt:d MMMM yyyy}:\n";
+                        msg = $"📅 {myuser.Group}, {mydt:dddd d MMMM yyyy}:\n";
                         var mysch = cmysch.GetScheduleForGroup(myuser.Group);
 
                         var appnd = "\n";
