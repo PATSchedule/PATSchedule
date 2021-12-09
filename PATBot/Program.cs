@@ -243,13 +243,14 @@ namespace PATBot
         static async Task HandleUpdateMyChatMemberAsync(ITelegramBotClient botClient, ChatMemberUpdated upd, CancellationToken cancellationToken)
         {
             var stat = upd.NewChatMember.Status;
-            var userId = upd.From.Id;
-            var userName = upd.From.Username;
+            var userId = upd.NewChatMember.User.Id;
+            var userName = upd.NewChatMember.User.Username;
 
             if (userId == MyId)
             {
-                userId = upd.NewChatMember.User.Id;
-                userName = upd.NewChatMember.User.Username;
+                await Console.Out.WriteLineAsync("Wtf?!");
+                userId = upd.From.Id;
+                userName = upd.From.Username;
             }
 
             var deluserid = "TG_" + userId.ToString();
@@ -734,7 +735,7 @@ namespace PATBot
                     replyMarkup: RemoveKeyboard
                 );
 
-                Console.WriteLine($"Initial dialog with: {upd.Chat.Username}");
+                Console.WriteLine($"Initial dialog with: {upd.From.Username}");
             }
         }
 
