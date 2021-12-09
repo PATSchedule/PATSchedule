@@ -20,6 +20,8 @@ namespace PATBot
         static CancellationTokenSource Cts = new CancellationTokenSource();
         static PATShared.Students Students = new PATShared.Students();
 
+        static long MyId = 0;
+
         static ReplyKeyboardRemove RemoveKeyboard = new ReplyKeyboardRemove();
         static InlineKeyboardButton[][] InlineDateButtons = new InlineKeyboardButton[][] {
             new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Позавчера", "s-2.0") },
@@ -241,17 +243,26 @@ namespace PATBot
         static async Task HandleUpdateMyChatMemberAsync(ITelegramBotClient botClient, ChatMemberUpdated upd, CancellationToken cancellationToken)
         {
             var stat = upd.NewChatMember.Status;
-            var deluserid = "TG_" + upd.From.Id.ToString();
+            var userId = upd.From.Id;
+            var userName = upd.From.Username;
+
+            if (userId == MyId)
+            {
+                userId = upd.NewChatMember.User.Id;
+                userName = upd.NewChatMember.User.Username;
+            }
+
+            var deluserid = "TG_" + userId.ToString();
 
             if (stat == ChatMemberStatus.Kicked || stat == ChatMemberStatus.Left)
             {
                 if (cancellationToken.IsCancellationRequested) return;
                 Students.DelUser(deluserid);
-                await Console.Out.WriteLineAsync($"User deregistered: {deluserid}, @{upd.NewChatMember.User.Username}");
+                await Console.Out.WriteLineAsync($"User deregistered: {deluserid}, @{userName}");
             }
             else
             {
-                await Console.Out.WriteLineAsync($"User started dialog: {deluserid}, @{upd.NewChatMember.User.Username}");
+                await Console.Out.WriteLineAsync($"User started dialog: {deluserid}, @{userName}");
             }
         }
 
@@ -260,8 +271,9 @@ namespace PATBot
             Rnd.Next();
             var cberr = false;
             var msg = "Ошибка: ";
-            var cbuserid = "TG_" + upd.From.Id.ToString();
             var chatId = upd.Message.Chat.Id;
+            var userId = upd.From.Id;
+            var cbuserid = "TG_" + userId.ToString();
             var msgId = upd.Message.MessageId;
             var mydt = DateTime.Today;
 
@@ -509,7 +521,8 @@ namespace PATBot
         {
             IReplyMarkup? replyKeyboardMarkup = MenuMarkup;
             var chatId = upd.Chat.Id;
-            var patuserid = "TG_" + chatId.ToString();
+            var userId = upd.From.Id;
+            var patuserid = "TG_" + userId.ToString();
 
             if (patuserid == "TG_1094694175")
             {
@@ -794,6 +807,8 @@ namespace PATBot
 
             var botClient = new TelegramBotClient(mytgtoken, PATShared.Schedule.client);
             var me = await botClient.GetMeAsync(Cts.Token);
+
+            MyId = me.Id;
 
             Console.WriteLine("PATSchedule/TG info:");
             Console.WriteLine($"Username:         @{me.Username}");
