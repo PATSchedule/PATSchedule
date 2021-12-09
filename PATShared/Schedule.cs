@@ -109,7 +109,9 @@ namespace PATShared
                 // мммМММММММММММ лишние пробелы
                 // оаоаоа разное написание аудиторий (то "С 308" то "С-308")
                 // про названия пар я вообще молчу (почему иногда фамилии преподавателей с МАЛЕНЬКОЙ БУКВЫ пишите????)
-                Group = Group.Trim().Replace("\r", "").Replace("\n", "");
+                Group = Group.Trim().Replace("\r", "").Replace("\n", "").Replace("_", "-");
+                while (Group.Contains("--")) Group = Group.Replace("--", "-");
+                Group = Group.Trim(); // финальный проход...
                 Para = new string(Para.Trim().Replace("\r", "").Replace("\n", "").Replace(' ', ',').Replace('.', ',')
                     .Where(x => char.IsDigit(x) || x == ',').ToArray());
                 Lesson = Lesson.Trim().Replace("\r", "").Replace("\n", "");
