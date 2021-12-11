@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Newtonsoft.Json.Linq;
+using System.IO;
 
 namespace PATShared
 {
@@ -19,15 +20,18 @@ namespace PATShared
         public static readonly CultureInfo my_culture = new CultureInfo("ru-RU"); // руссиш спарше
 
 
+        IDictionary<string, byte[]> Cache;
         IDictionary<string, IList<SingleReplacement>> MySchedule;
 
         public bool ReplacementsUsed = false;
         public string ReplacementUrl = "";
         public string ReplacementFile = "";
+        
 
         public Schedule()
         {
             MySchedule = new Dictionary<string, IList<SingleReplacement>>();
+            Cache = new Dictionary<string, byte[]>();
         }
 
         public IList<SingleReplacement>? GetScheduleForGroup(string groupName)
@@ -223,10 +227,13 @@ namespace PATShared
 
         async Task<IDictionary<string, IList<SingleReplacement>>> FetchOne(string url)
         {
-            using var _docx = await client.GetStreamAsync(url);
+            // учебная часть всегда выкладывает новый файл вместо того чтобы обновлять текущий
+            // и слава богу
+            var _docx = Cache.ContainsKey(url) ? Cache[url] : await client.GetByteArrayAsync(url);
+            using var _ms = new MemoryStream(_docx);
             var d = new Dictionary<string, IList<SingleReplacement>>();
 
-            using var document = WordprocessingDocument.Open(_docx, false);
+            using var document = WordprocessingDocument.Open(_ms, false);
 
             //document.
             if (document.MainDocumentPart is null)
@@ -382,7 +389,7 @@ namespace PATShared
 
             foreach (var kvp in jsonsch.Data)
             {
-                string mygroup = kvp.Key;
+                var mygroup = kvp.Key;
                 var days = kvp.Value;
 
                 var lst = new List<SingleReplacement>();
@@ -439,10 +446,13 @@ namespace PATShared
 
                 ReplacementsUsed = false;
 
+                if (files.Length < 0) return;
                 foreach (var e in files)
                 {
+                    if (e.Children.Length < 1) continue;
                     foreach (var ee in e.Children.Reverse())
                     {
+                        if (ee.Children.Length < 1) continue;
                         foreach (var eee in ee.Children.Reverse())
                         {
                             if (eee is IHtmlAnchorElement ihae)
@@ -455,12 +465,14 @@ namespace PATShared
                                 if (!actualurl.EndsWith(".docx")) continue;
                                 if (DateTime.Compare(date, origindate) != 0) continue;
 
-                                // скачиваем замену:
-                                var replacement = await FetchOne(actualurl);
-                                MySchedule = Merge(MySchedule, replacement);
+                                // ставим флажок что замены найдены
                                 ReplacementsUsed = true;
                                 ReplacementUrl = actualurl;
                                 ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
+
+                                // скачиваем замену:
+                                var replacement = await FetchOne(actualurl);
+                                MySchedule = Merge(MySchedule, replacement);
 
                                 return;
                             }
@@ -468,7 +480,10 @@ namespace PATShared
                     }
                 }
             }
-            catch { }
+            catch (Exception exc)
+            {
+                Console.WriteLine($"Unable to fetch replacements: {exc}");
+            }
         }
     }
 }

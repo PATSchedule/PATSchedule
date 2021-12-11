@@ -402,7 +402,8 @@ namespace PATBot
                                                 var cabfloor = mysch[si].Room.Split('-')[1][0];
 
                                                 // если в расписании есть спортзал, то 1 этаж...
-                                                if (hassport) cabfloor = '1';
+                                                // if (hassport) cabfloor = '1';
+                                                // оказывается так делать не надо??
 
                                                 switch (cabfloor)
                                                 {
@@ -804,9 +805,12 @@ namespace PATBot
             Console.WriteLine("Downloading clock schedule...");
             await PATShared.Utils.DownloadClockSchedule(PATShared.Schedule.client, Cts.Token);
 
+            Console.WriteLine("Running DB save task...");
             Students.RunSaveTask(Cts.Token);
 
             var botClient = new TelegramBotClient(mytgtoken, PATShared.Schedule.client);
+
+            Console.WriteLine("Telegram instantiated, getting info...");
             var me = await botClient.GetMeAsync(Cts.Token);
 
             MyId = me.Id;
