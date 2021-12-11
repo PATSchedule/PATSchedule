@@ -230,6 +230,7 @@ namespace PATShared
             // учебная часть всегда выкладывает новый файл вместо того чтобы обновлять текущий
             // и слава богу
             var _docx = Cache.ContainsKey(url) ? Cache[url] : await client.GetByteArrayAsync(url);
+            Cache[url] = _docx;
             using var _ms = new MemoryStream(_docx);
             var d = new Dictionary<string, IList<SingleReplacement>>();
 
