@@ -59,7 +59,7 @@ namespace PATShared
             n = n
                 .ToLower(my_culture)
                 .Substring(n.IndexOf("на")+2)
-                .Replace(".", "")
+                //.Replace(".", "")
                 .Replace(",", "")
                 .Trim();
 
