@@ -41,6 +41,14 @@ namespace PATShared
             else return null;
         }
 
+        static string FixupName(string n)
+        {
+            return n
+                .Replace("декб", "декаб");
+                // добавлять сюда опечатки учебной части.
+                // а если учебная часть это вдруг читает, вам не стыдно? -_-
+        }
+
         static DateTime ParseName(string n)
         {
             // >:(
@@ -54,6 +62,8 @@ namespace PATShared
                 .Replace(".", "")
                 .Replace(",", "")
                 .Trim();
+
+            n = FixupName(n);
 
             return DateTime.Parse(n, my_culture);
         }
