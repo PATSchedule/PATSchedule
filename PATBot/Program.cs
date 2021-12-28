@@ -30,7 +30,23 @@ namespace PATBot
             new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Завтра", "s1.0") },
             new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Послезавтра", "s2.0") }
         };
+        static InlineKeyboardButton[][] InlineDateButtonsPoned = new InlineKeyboardButton[][] {
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Позавчера", "s-2.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Вчера", "s-1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Сегодня", "s0.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Завтра", "s1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Понедельник", "s3.0") }
+        };
+        static InlineKeyboardButton[][] InlineDateButtonsNegPoned = new InlineKeyboardButton[][] {
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Понедельник", "s-3.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Вчера", "s-1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Сегодня", "s0.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Завтра", "s1.0") },
+            new InlineKeyboardButton[] { InlineKeyboardButton.WithCallbackData("Послезавтра", "s2.0") }
+        };
         static InlineKeyboardMarkup InlineDateMarkup = new InlineKeyboardMarkup(InlineDateButtons);
+        static InlineKeyboardMarkup InlineDateMarkupNegPoned = new InlineKeyboardMarkup(InlineDateButtonsNegPoned);
+        static InlineKeyboardMarkup InlineDateMarkupPoned = new InlineKeyboardMarkup(InlineDateButtonsPoned);
 
         const string NAME_BANNED = "❌ ой ой, вы быть забанен из данный бот во слава великий китай компартия 🇨🇳🇨🇳🇨🇳🇨🇳🇨🇳 лидер xi.";
         const string NAME_SCHEDULE = "📅 Расписание";
@@ -267,6 +283,16 @@ namespace PATBot
             }
         }
 
+        static InlineKeyboardMarkup GetDateMarkup()
+        {
+            // послезавтра==воскресенье => понедельник
+            // позавчера==воскресенье => понедельник
+            return
+                (DateTime.Now.AddDays(2.0).DayOfWeek == DayOfWeek.Sunday) ? InlineDateMarkupPoned :
+                (DateTime.Now.AddDays(-2.0).DayOfWeek == DayOfWeek.Sunday) ? InlineDateMarkupNegPoned :
+                InlineDateMarkup;
+        }
+
         static async Task HandleUpdateCallbackQueryAsync(ITelegramBotClient botClient, CallbackQuery upd, CancellationToken cancellationToken)
         {
             Rnd.Next();
@@ -285,7 +311,7 @@ namespace PATBot
             }
 
             var myuser = Students.GetUser(cbuserid);
-            var imr = InlineDateMarkup;
+            var imr = GetDateMarkup();
 
             var mystr = upd.Data;
 
@@ -302,8 +328,10 @@ namespace PATBot
                 {
                     case "-1.0": mydt = mydt.AddDays(-1.0); break;
                     case "-2.0": mydt = mydt.AddDays(-2.0); break;
+                    case "-3.0": mydt = mydt.AddDays(-3.0); break;
                     case "1.0": mydt = mydt.AddDays(1.0); break;
                     case "2.0": mydt = mydt.AddDays(2.0); break;
+                    case "3.0": mydt = mydt.AddDays(3.0); break;
                     case "0.0": break;
                     default:
                         {
@@ -353,7 +381,15 @@ namespace PATBot
                             {
                                 if (mysch[si].CanIgnore()) continue;
 
-                                if (mysch[si].Para == 0)
+                                if (mydt.Day == 30 && mydt.Month == 12 && mydt.Year == 2021)
+                                {
+                                    // см. https://permaviat.ru/news/2021/12/25/950/
+                                    // можно было вынести такие вот внеплановые замены в отдельный JSON, но мне лень.
+                                    // новый год же!
+                                    suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.P1)[mysch[si].Para - 1]);
+                                    appnd = "(пара час 30дек, см. сайт техникума)";
+                                }
+                                else if (mysch[si].Para == 0)
                                 {
                                     suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.UNK)[0]);
                                     appnd = "(практика)";
@@ -465,6 +501,13 @@ namespace PATBot
 
                 var dtnow = DateTime.Now;
                 msg += "\nДанные актуальны на " + dtnow.ToLongDateString() + " " + dtnow.ToLongTimeString();
+                // 31 декабря
+                if (dtnow.Day == 31 && dtnow.Month == 12)
+                {
+                    // последний эмодзи: юникод кодпоинт U+1FAC2 "PEOPLE HUGGING EMOJI"
+                    msg += "\nС новым годом вас, от PATSchedule! 🐯🍰🫂";
+                    msg += "\nЛучше отдохните, а не расписание смотрите 🙃...";
+                }
             }
             else if (!cberr && mystr.StartsWith('m'))
             {
@@ -635,7 +678,7 @@ namespace PATBot
                         case NAME_SCHEDULE:
                             {
                                 msg = "На какой день показать?\nПока можно только кнопками снизу:";
-                                replyKeyboardMarkup = InlineDateMarkup;
+                                replyKeyboardMarkup = GetDateMarkup();
                                 break;
                             }
 
@@ -645,6 +688,7 @@ namespace PATBot
                         case "hrue":
                         case "хрю":
                         case "hruxe":
+                        case "hruxa":
                         case "хрюха":
                             {
                                 sendout = false;
@@ -664,6 +708,11 @@ namespace PATBot
                         case "meow":
                         case "мяу":
                         case "кися":
+                        case "китя":
+                        case "котик":
+                        case "кошка":
+                        case "koshq":
+                        case "koshque":
                             {
                                 sendout = false;
 
@@ -818,7 +867,7 @@ namespace PATBot
             Console.WriteLine("PATSchedule/TG info:");
             Console.WriteLine($"Username:         @{me.Username}");
             Console.WriteLine($"Id:               {me.Id}");
-            Console.WriteLine($"Name:             '{me.FirstName} {me.LastName}'");
+            Console.WriteLine($"Name:             'first={me.FirstName},last={me.LastName}'");
             Console.WriteLine($"Can join groups?  {me.CanJoinGroups}");
             Console.WriteLine($"Can read all msg? {me.CanReadAllGroupMessages}");
             Console.WriteLine($"Inline queries?   {me.SupportsInlineQueries}");

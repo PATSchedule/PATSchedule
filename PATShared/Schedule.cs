@@ -148,11 +148,23 @@ namespace PATShared
             {
                 IList<SingleLine> list = new List<SingleLine>();
 
-                string[] nums = Para.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                var nums = Para.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
-                for (int i = 0; i < nums.Length; ++i)
+                for (var i = 0; i < nums.Length; ++i)
                 {
                     list.Add(new SingleLine(Group, nums[i], Lesson, Room));
+                }
+
+                var gr = Group;
+                var grpos = gr.IndexOf(',');
+                if (grpos > 0)
+                {
+                    nums = gr.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    gr = gr.Substring(0, grpos - 1); // "МХ-21-"
+                    for (var i = 0; i < nums.Length; ++i)
+                    {
+                        // TODO: реализовать такой странный формат групп.
+                    }
                 }
 
                 return list;
