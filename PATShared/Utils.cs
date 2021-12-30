@@ -59,8 +59,18 @@ namespace PATShared
 
         public static bool IsSecondWeek(DateTime dt)
         {
+            var y = dt.Year;
             var m = dt.Month;
             var d = dt.Day;
+
+            // https://www.permaviat.ru/news/2021/12/30/953/
+            // Занятия с 10 по 15 января 2022 г. будут по расписанию ПЕРВОЙ недели.
+            // Следующие недели нумеруются в соответствии с действующим графиком: https://www.permaviat.ru/raspisanie-n/
+            if (y == 2022 && m == 1 && d >= 10 && d <= 15)
+            {
+                // Is second week? no, first.
+                return false;
+            }
 
             // https://sun9-73.userapi.com/AWFuFXvG0766RVLMipZvC6TogNN439GtUeKviQ/Nn8U4CwvRz4.jpg
             // там нельзя просто день поделить на два, там кошмар.
@@ -105,6 +115,8 @@ namespace PATShared
                 if (cts.IsCancellationRequested) return;
 
                 var json = JsonCallSchedule.Parse(thejson);
+
+                if (cts.IsCancellationRequested) return;
 
                 if (json is null
                     || json.Data.A1 is null
