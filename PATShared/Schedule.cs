@@ -19,8 +19,19 @@ namespace PATShared
         static readonly string repl_uri = "https://permaviat.ru/raspisanie-zamen/";
         public static readonly CultureInfo my_culture = new CultureInfo("ru-RU"); // руссиш спарше
 
+        class CacheEntry
+        {
+            public string FileUrl;
+            public IDictionary<string, IList<SingleReplacement>> Data;
 
-        static IDictionary<DateTime, IDictionary<string, IList<SingleReplacement>>> Cache = new Dictionary<DateTime, IDictionary<string, IList<SingleReplacement>>>();
+            public CacheEntry(string fileurl, IDictionary<string, IList<SingleReplacement>> data)
+            {
+                FileUrl = fileurl;
+                Data = data;
+            }
+        }
+
+        static IDictionary<DateTime, CacheEntry> Cache = new Dictionary<DateTime, CacheEntry>();
         IDictionary<string, IList<SingleReplacement>> MySchedule = new Dictionary<string, IList<SingleReplacement>>();
 
         public bool ReplacementsUsed = false;
@@ -696,7 +707,17 @@ namespace PATShared
 
                     if (hascached)
                     {
-                        MySchedule = Cache[origindate];
+                        var cacheentry = Cache[origindate];
+                        MySchedule = cacheentry.Data;
+
+                        // проставить ссылку на файл из которого был сделан кэш, если ссылка есть конечно
+                        if (!string.IsNullOrWhiteSpace(cacheentry.FileUrl))
+                        {
+                            ReplacementsUsed = true;
+                            ReplacementUrl = cacheentry.FileUrl;
+                            ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
+                        }
+
                         return;
                     }
                 }
@@ -747,7 +768,7 @@ namespace PATShared
 
                                     lock (Cache)
                                     {
-                                        Cache[origindate] = MySchedule;
+                                        Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
                                     }
                                 }
                                 else if (ReplacementFile.EndsWith(".xls") || ReplacementFile.EndsWith(".xlsx"))
@@ -758,7 +779,7 @@ namespace PATShared
 
                                     lock (Cache)
                                     {
-                                        Cache[origindate] = MySchedule;
+                                        Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
                                     }
                                 }
                                 else
