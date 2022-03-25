@@ -20,19 +20,12 @@ namespace PATShared
         public static readonly CultureInfo my_culture = new CultureInfo("ru-RU"); // руссиш спарше
 
 
-        IDictionary<string, byte[]> Cache;
-        IDictionary<string, IList<SingleReplacement>> MySchedule;
+        static IDictionary<DateTime, IDictionary<string, IList<SingleReplacement>>> Cache = new Dictionary<DateTime, IDictionary<string, IList<SingleReplacement>>>();
+        IDictionary<string, IList<SingleReplacement>> MySchedule = new Dictionary<string, IList<SingleReplacement>>();
 
         public bool ReplacementsUsed = false;
         public string ReplacementUrl = "";
         public string ReplacementFile = "";
-        
-
-        public Schedule()
-        {
-            MySchedule = new Dictionary<string, IList<SingleReplacement>>();
-            Cache = new Dictionary<string, byte[]>();
-        }
 
         public IList<SingleReplacement>? GetScheduleForGroup(string groupName)
         {
@@ -73,7 +66,6 @@ namespace PATShared
             public int Para; // номер пары, 1,2,3,4.... 0 если это полная замена (нужно стереть все существующие пары!)
             public string Room; // 'Т-228'
             public string Subject; // 'Информатика (Паренкова А.С.)'
-            public Building MyBuilding;
 
             public SingleReplacement(int _p, string _room, string _subject)
             {
@@ -247,12 +239,235 @@ namespace PATShared
             return r;
         }
 
+        // нет в шарпе анонимных функций :(
+        delegate NPOI.SS.UserModel.ICell DGetActiveCell(NPOI.SS.UserModel.ISheet sht, NPOI.SS.Util.CellAddress addr);
+        delegate string DGetCellValue(NPOI.SS.UserModel.ICell cell);
+        delegate NPOI.SS.Util.CellAddress DMoveAddress(NPOI.SS.Util.CellAddress addr, int offrow, int offcol);
+
+        class StringChitatel
+        {
+            string str;
+            int pos;
+
+            public StringChitatel(string _s)
+            {
+                str = _s;
+                pos = 0;
+            }
+
+            public int Pos()
+            {
+                return pos;
+            }
+
+            public void ToEnd()
+            {
+                pos = str.Length - 1;
+            }
+
+            public void ToStart()
+            {
+                pos = 0;
+            }
+
+            public void SkipWhitespaceForwards()
+            {
+                while (char.IsWhiteSpace(str[pos])) ++pos;
+            }
+
+            public void SkipWhitespaceBackwards()
+            {
+                while (char.IsWhiteSpace(str[pos])) --pos;
+            }
+
+            public string StringAtBackwards(int l)
+            {
+                var s = str.Substring(pos - l + 1, l);
+                pos -= l;
+                return s;
+            }
+
+            public string StringAtForwards(int l)
+            {
+                var s = str.Substring(pos, l);
+                pos += l;
+                return s;
+            }
+
+            public char CharAt(int p = -1)
+            {
+                return (p < 0) ? str[pos] : str[p];
+            }
+        }
+
+        SingleReplacement ParseExcelCells(int num, string subjectcell, string teachercell)
+        {
+            var reader = new StringChitatel(subjectcell);
+            reader.ToEnd();
+            reader.SkipWhitespaceBackwards();
+
+            var suffix = string.IsNullOrWhiteSpace(teachercell) ? "" : $" ({teachercell})";
+
+            var hasbuilding = uint.TryParse(reader.StringAtBackwards(3), NumberStyles.AllowTrailingWhite, my_culture, out uint roomdigits);
+            if (!hasbuilding)
+            {
+                return new SingleReplacement(num, "", subjectcell + suffix);
+            }
+
+            reader.SkipWhitespaceBackwards();
+            var buildingletter = reader.StringAtBackwards(1)[0];
+            var fullroomname = buildingletter.ToString() + "-" + roomdigits.ToString();
+            return new SingleReplacement(num, fullroomname, subjectcell.Substring(0, reader.Pos() + 1).Trim() + suffix);
+        }
+
+        async Task<IDictionary<string, IList<SingleReplacement>>> FetchWeirdXls(string url)
+        {
+            // либо берём из кэша cache[ссылка] = byte[], либо скачиваем
+            var _xls = await client.GetByteArrayAsync(url);
+            using var _ms = new MemoryStream(_xls);
+            var d = new Dictionary<string, IList<SingleReplacement>>();
+
+            // -- кошмар начинается -- //
+            var workbook = NPOI.SS.UserModel.WorkbookFactory.Create(_ms);
+            if (workbook is null) throw new NullReferenceException();
+            var sheet = workbook.GetSheetAt(0);
+            if (sheet is null) throw new NullReferenceException();
+
+            DGetActiveCell getcell = (NPOI.SS.UserModel.ISheet sht, NPOI.SS.Util.CellAddress addr) => {
+                return sht.GetRow(addr.Row).GetCell(addr.Column);
+            };
+            DGetCellValue getcellv = (NPOI.SS.UserModel.ICell cell) => {
+                return (cell is null) ? string.Empty : (cell.ToString() ?? string.Empty);
+            };
+            DMoveAddress movecell = (NPOI.SS.Util.CellAddress addr, int offrow, int offcol) => {
+                return new NPOI.SS.Util.CellAddress(addr.Row + offrow, addr.Column + offcol);
+            };
+
+            var _START = NPOI.SS.Util.CellAddress.A1;
+            var _NUMBERSC = int.MinValue;
+            while (true)
+            {
+                var thevalue = getcellv(getcell(sheet, _START));
+                if (!thevalue.Trim().Contains("День недели"))
+                {
+                    _START = movecell(_START, 1, 0);
+                    continue;
+                }
+
+                while (true)
+                {
+                    thevalue = getcellv(getcell(sheet, _START));
+                    _NUMBERSC = _START.Column;
+                    _START = movecell(_START, 0, 1);
+                    if (thevalue.Trim().Contains("№ пары"))
+                    {
+                        break;
+                    }
+                }
+
+                break;
+            }
+
+            var _SHEETPOS = new NPOI.SS.Util.CellAddress(_START.Row, _START.Column);
+            var _MAXLESSONS = int.MinValue;
+            
+            while (true)
+            {
+                var _groupname = getcellv(getcell(sheet, _SHEETPOS));
+                if (string.IsNullOrWhiteSpace(_groupname))
+                {
+                    _SHEETPOS = movecell(_SHEETPOS, (_MAXLESSONS * 2) + 1, _START.Column - _SHEETPOS.Column);
+                    if (string.IsNullOrWhiteSpace(getcellv(getcell(sheet, _SHEETPOS))))
+                    {
+                        break;
+                    }
+
+                    _MAXLESSONS = int.MinValue;
+                    continue;
+                }
+
+                _groupname = _groupname.Trim().Replace("\r\n", "").Replace("\n", "").Replace(" ", "-").ToUpper(my_culture);
+                var lst = new List<SingleReplacement>();
+                var _LESSONADDR = movecell(_SHEETPOS, 1, 0);
+                //await Console.Out.WriteLineAsync($"Processing group {_groupname}");
+                while (true)
+                {
+                    var _lessonstring = getcellv(getcell(sheet, new NPOI.SS.Util.CellAddress(_LESSONADDR.Row, _NUMBERSC)));
+                    _lessonstring = _lessonstring.Trim().Replace("\r\n", "").Replace("\n", "");
+                    var _parseok = int.TryParse(_lessonstring, out int i);
+                    if (!_parseok)
+                    {
+                        break;
+                    }
+
+                    _MAXLESSONS = Math.Max(_MAXLESSONS, i);
+                    var _subjectname = getcellv(getcell(sheet, _LESSONADDR));
+                    _LESSONADDR = movecell(_LESSONADDR, 1, 0);
+                    var _teachername = getcellv(getcell(sheet, _LESSONADDR));
+                    _LESSONADDR = movecell(_LESSONADDR, 1, 0);
+
+                    _subjectname = _subjectname.Trim().Replace("\r\n", "").Replace("\n", "");
+                    _teachername = _teachername.Trim().Replace("\r\n", "").Replace("\n", "");
+                    if (string.IsNullOrWhiteSpace(_subjectname))
+                    {
+                        continue;
+                    }
+
+                    var sr = ParseExcelCells(i, _subjectname, _teachername);
+                    lst.Add(sr);
+                    //await Console.Out.WriteLineAsync($"Processed {sr}.");
+                }
+
+                // -- пытаемся исправить пары у которых не проставлен корпус.... -- //
+                var knownroom = "";
+                for (var i = 0; i < lst.Count; ++i)
+                {
+                    if (!string.IsNullOrWhiteSpace(lst[i].Room))
+                    {
+                        // 'А-1??'
+                        knownroom = lst[i].Room[0] + "-1??";
+                        break;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(knownroom))
+                {
+                    var istelta = knownroom[0] == 'Т';
+
+                    for (var i = 0; i < lst.Count; ++i)
+                    {
+                        if (string.IsNullOrWhiteSpace(lst[i].Room))
+                        {
+                            var supposedname = lst[i].Subject.ToLower(my_culture);
+                            if (supposedname.Contains("физкул") || supposedname.Contains("физич"))
+                            {
+                                lst[i].Room = istelta ? "Т-Спортзал" : "Спортзал";
+                            }
+                            else
+                            {
+                                lst[i].Room = knownroom;
+                            }
+                        }
+                    }
+                }
+
+                if (d.ContainsKey(_groupname))
+                {
+                    throw new InvalidDataException("Already processed group " + _groupname);
+                }
+
+                d[_groupname] = lst;
+                _SHEETPOS = movecell(_SHEETPOS, 0, 1);
+            }
+
+            return d;
+        }
+
         async Task<IDictionary<string, IList<SingleReplacement>>> FetchOne(string url)
         {
             // учебная часть всегда выкладывает новый файл вместо того чтобы обновлять текущий
             // и слава богу
-            var _docx = Cache.ContainsKey(url) ? Cache[url] : await client.GetByteArrayAsync(url);
-            Cache[url] = _docx;
+            var _docx = await client.GetByteArrayAsync(url);
             using var _ms = new MemoryStream(_docx);
             var d = new Dictionary<string, IList<SingleReplacement>>();
 
@@ -453,7 +668,38 @@ namespace PATShared
         {
             try
             {
-                await FetchExcels(origindate); // fetch base schedule
+                lock (Cache)
+                {
+                    var hascached = false;
+                    var tocleanup = new List<DateTime>();
+                    // смотрим сначала есть ли наш искомый элемент в кэше, ЛИБО (!!!)
+                    // если есть какие-то очень очень старые записи то помечаем их на удаление...
+                    foreach (var item in Cache)
+                    {
+                        // сначала if date == key, чтобы случайно не удалить нужную кэшированую запись
+                        if (origindate == item.Key)
+                        {
+                            hascached = true;
+                        }
+                        else if ((DateTime.Now - item.Key).Days > 10)
+                        {
+                            // потом уже проверяем нужно ли удалить
+                            tocleanup.Add(item.Key);
+                        }
+                    }
+
+                    foreach (var item in tocleanup)
+                    {
+                        Console.WriteLine($"Removing very old cache entry {item:dd MM yyyy}");
+                        Cache.Remove(item);
+                    }
+
+                    if (hascached)
+                    {
+                        MySchedule = Cache[origindate];
+                        return;
+                    }
+                }
 
                 var bcfg = Configuration.Default
                     .WithDefaultLoader()
@@ -485,7 +731,6 @@ namespace PATShared
                                 var date = ParseName(ihae.Text);
 
                                 // пару раз там учебная часть выложила замены в .PDF
-                                if (!actualurl.EndsWith(".docx")) continue;
                                 if (DateTime.Compare(date, origindate) != 0) continue;
 
                                 // ставим флажок что замены найдены
@@ -494,8 +739,32 @@ namespace PATShared
                                 ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
 
                                 // скачиваем замену:
-                                var replacement = await FetchOne(actualurl);
-                                MySchedule = Merge(MySchedule, replacement);
+                                if (ReplacementFile.EndsWith(".docx"))
+                                {
+                                    await FetchExcels(origindate); // fetch base schedule
+                                    var docxreplacement = await FetchOne(actualurl);
+                                    MySchedule = Merge(MySchedule, docxreplacement);
+
+                                    lock (Cache)
+                                    {
+                                        Cache[origindate] = MySchedule;
+                                    }
+                                }
+                                else if (ReplacementFile.EndsWith(".xls") || ReplacementFile.EndsWith(".xlsx"))
+                                {
+                                    var xlsxreplacement = await FetchWeirdXls(actualurl);
+                                    // здесь без Merge()...
+                                    MySchedule = xlsxreplacement;
+
+                                    lock (Cache)
+                                    {
+                                        Cache[origindate] = MySchedule;
+                                    }
+                                }
+                                else
+                                {
+                                    throw new InvalidDataException("Replacement file has an invalid data type, " + ReplacementFile);
+                                }
 
                                 return;
                             }

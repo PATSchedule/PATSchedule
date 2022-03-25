@@ -74,7 +74,7 @@ namespace PATBot
 
         static Random Rnd = new Random();
 
-        static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons, true, true);
+        static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons) { ResizeKeyboard = true, OneTimeKeyboard = true };
 
         static InlineKeyboardMarkup MoodleMarkupDelete = new InlineKeyboardMarkup(new InlineKeyboardButton[]
                 {
@@ -143,7 +143,7 @@ namespace PATBot
 
                 var tag = new MoodleListTag();
 
-                sb.AppendLine($"Вы зашли в [{userinfo.sitename}]({userinfo.siteurl})\nкак [{userinfo.firstname}]({userinfo.siteurl}/user/profile.php?id={userinfo.userid})\nИспользуйте кнопки ниже для навигации по курсам.\n\nДанные актуальны на {tag.startfrom:d}.\nДля выхода из Moodle нажмите на ❌.\nТЕСТ: версия мудл у сайта={userinfo.release}"); 
+                sb.AppendLine($"Вы зашли в [{userinfo.sitename}]({userinfo.siteurl})\nкак [{userinfo.firstname}]({userinfo.siteurl}/user/profile.php?id={userinfo.userid})\nИспользуйте кнопки ниже для навигации по курсам.\n\nДанные актуальны на {tag.startfrom.ToString("d", PATShared.Schedule.my_culture)}.\nДля выхода из Moodle нажмите на ❌.\nТЕСТ: версия мудл у сайта={userinfo.release}"); 
 
                 var i = 1;
 
@@ -232,8 +232,15 @@ namespace PATBot
 
         static void FixConsole()
         {
-            Console.OutputEncoding = Encoding.UTF8;
-            Console.InputEncoding = Encoding.UTF8;
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+                Console.InputEncoding = Encoding.UTF8;
+            }
+            catch
+            {
+                // if we have no console or can't do it.
+            }
         }
 
         static async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
@@ -310,6 +317,11 @@ namespace PATBot
                 return;
             }
 
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             var myuser = Students.GetUser(cbuserid);
             var imr = GetDateMarkup();
 
@@ -359,7 +371,7 @@ namespace PATBot
                     }
                     else
                     {
-                        msg = $"📅 {myuser.Group}, {mydt:dddd d MMMM yyyy}:\n";
+                        msg = $"📅 {myuser.Group}, {mydt.ToString("dddd d MMMM yyyy", PATShared.Schedule.my_culture)}:\n";
                         var mysch = cmysch.GetScheduleForGroup(myuser.Group);
 
                         var appnd = "\n";
@@ -500,7 +512,7 @@ namespace PATBot
                 }
 
                 var dtnow = DateTime.Now;
-                msg += "\nДанные актуальны на " + dtnow.ToLongDateString() + " " + dtnow.ToLongTimeString();
+                msg += "\nДанные актуальны на " + dtnow.ToString("dd.MM.yyyy HH:mm.ss", PATShared.Schedule.my_culture);
                 // 31 декабря
                 if (dtnow.Day == 31 && dtnow.Month == 12)
                 {
@@ -572,6 +584,11 @@ namespace PATBot
             if (patuserid == "TG_1094694175")
             {
                 await botClient.SendTextMessageAsync(chatId, NAME_BANNED, cancellationToken: cancellationToken);
+                return;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
                 return;
             }
 
@@ -793,6 +810,11 @@ namespace PATBot
         {
             try
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 switch (update.Type)
                 {
                     case UpdateType.MyChatMember:
@@ -874,9 +896,11 @@ namespace PATBot
             Console.WriteLine($"Am I a bot?       {me.IsBot}");
             Console.WriteLine();
 
-            Console.WriteLine("Listening...");
+            Console.WriteLine("Starting listen...");
 
-            botClient.StartReceiving(new DefaultUpdateHandler(HandleUpdateAsync, HandleErrorAsync), Cts.Token);
+            botClient.StartReceiving(HandleUpdateAsync, HandleErrorAsync, new ReceiverOptions(), Cts.Token);
+
+            Console.WriteLine("Entering delay...");
 
             await Task.Delay(-1, Cts.Token);
         }
