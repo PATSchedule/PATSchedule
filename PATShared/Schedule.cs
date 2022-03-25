@@ -254,6 +254,7 @@ namespace PATShared
         delegate NPOI.SS.UserModel.ICell DGetActiveCell(NPOI.SS.UserModel.ISheet sht, NPOI.SS.Util.CellAddress addr);
         delegate string DGetCellValue(NPOI.SS.UserModel.ICell cell);
         delegate NPOI.SS.Util.CellAddress DMoveAddress(NPOI.SS.Util.CellAddress addr, int offrow, int offcol);
+        delegate int DGetCellColor(NPOI.SS.UserModel.ICell cell);
 
         class StringChitatel
         {
@@ -317,17 +318,38 @@ namespace PATShared
             reader.ToEnd();
             reader.SkipWhitespaceBackwards();
 
-            var suffix = string.IsNullOrWhiteSpace(teachercell) ? "" : $" ({teachercell})";
+            var roomdigits = 000u; // 000
+            var buildingletter = 'Й'; // лол.
+            var fullroomname = "Й-000";
 
-            var hasbuilding = uint.TryParse(reader.StringAtBackwards(3), NumberStyles.AllowTrailingWhite, my_culture, out uint roomdigits);
+            if (!string.IsNullOrWhiteSpace(teachercell))
+            {
+                var treader = new StringChitatel(teachercell);
+                treader.ToEnd();
+                treader.SkipWhitespaceBackwards();
+                
+                var thasbuilding = uint.TryParse(treader.StringAtBackwards(3), NumberStyles.AllowTrailingWhite, my_culture, out roomdigits);
+                if (thasbuilding)
+                {
+                    // ------------ В СТРОКЕ УЧИТЕЛЯ ЕСТЬ НОМЕР КАБИНЕТА ??? ------------ //
+                    treader.SkipWhitespaceBackwards();
+                    buildingletter = treader.StringAtBackwards(1)[0];
+                    fullroomname = buildingletter + "-" + roomdigits.ToString();
+                    teachercell = teachercell.Substring(0, treader.Pos() + 1).Trim();
+                    return new SingleReplacement(num, fullroomname, subjectcell.Trim() + $" ({teachercell})");
+                }
+            }
+
+            var suffix = string.IsNullOrWhiteSpace(teachercell) ? "" : $" ({teachercell})";
+            var hasbuilding = uint.TryParse(reader.StringAtBackwards(3), NumberStyles.AllowTrailingWhite, my_culture, out roomdigits);
             if (!hasbuilding)
             {
                 return new SingleReplacement(num, "", subjectcell + suffix);
             }
 
             reader.SkipWhitespaceBackwards();
-            var buildingletter = reader.StringAtBackwards(1)[0];
-            var fullroomname = buildingletter.ToString() + "-" + roomdigits.ToString();
+            buildingletter = reader.StringAtBackwards(1)[0];
+            fullroomname = buildingletter.ToString() + "-" + roomdigits.ToString();
             return new SingleReplacement(num, fullroomname, subjectcell.Substring(0, reader.Pos() + 1).Trim() + suffix);
         }
 
@@ -352,6 +374,10 @@ namespace PATShared
             };
             DMoveAddress movecell = (NPOI.SS.Util.CellAddress addr, int offrow, int offcol) => {
                 return new NPOI.SS.Util.CellAddress(addr.Row + offrow, addr.Column + offcol);
+            };
+            DGetCellColor getcellc = (NPOI.SS.UserModel.ICell cell) => {
+                //
+                return 0;
             };
 
             var _START = NPOI.SS.Util.CellAddress.A1;
@@ -380,7 +406,7 @@ namespace PATShared
             }
 
             var _SHEETPOS = new NPOI.SS.Util.CellAddress(_START.Row, _START.Column);
-            var _MAXLESSONS = int.MinValue;
+            var _MAXLESSONS = 1;
             
             while (true)
             {
@@ -393,7 +419,7 @@ namespace PATShared
                         break;
                     }
 
-                    _MAXLESSONS = int.MinValue;
+                    _MAXLESSONS = 1;
                     continue;
                 }
 
@@ -404,7 +430,9 @@ namespace PATShared
                 while (true)
                 {
                     var _lessonstring = getcellv(getcell(sheet, new NPOI.SS.Util.CellAddress(_LESSONADDR.Row, _NUMBERSC)));
-                    _lessonstring = _lessonstring.Trim().Replace("\r\n", "").Replace("\n", "");
+                    _lessonstring = _lessonstring.Trim().Replace("\r\n", "").Replace("\n", "").Trim();
+                    // да блять, тут проблема с парой 5 и больше
+
                     var _parseok = int.TryParse(_lessonstring, out int i);
                     if (!_parseok)
                     {

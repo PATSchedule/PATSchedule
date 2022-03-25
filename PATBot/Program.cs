@@ -430,7 +430,9 @@ namespace PATBot
 
                                         case 'Т':
                                             {
-                                                var cabnum = int.Parse(mysch[si].Room.Split('-')[1]);
+                                                var parsedok = int.TryParse(mysch[si].Room.Split('-')[1], out int cabnum);
+                                                if (!parsedok) cabnum = 100;
+
                                                 if (cabnum % 2 == 0)
                                                 {
                                                     suffixes.Add(prep + PATShared.Utils.FetchClockSchedule( PATShared.Building.T1)[mysch[si].Para - 1]);
