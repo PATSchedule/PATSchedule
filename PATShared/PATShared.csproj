@@ -17,4 +17,8 @@
     <PackageReference Include="NPOI" Version="2.5.5" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AE\AntiEpos\AntiEpos.csproj" />
+  </ItemGroup>
+
 </Project>

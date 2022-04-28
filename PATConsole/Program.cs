@@ -1,7 +1,10 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using PATShared;
 using System;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Text;
-using System.Windows;
 
 const int EXIT_SUCCESS = 0;
 const int EXIT_FAILURE = 1;
@@ -12,20 +15,25 @@ try
     Console.OutputEncoding = Encoding.UTF8;
     Console.InputEncoding = Encoding.UTF8;
 
-    var m = new PATShared.Schedule();
-    await m.FetchSchedule(new DateTime(2021, 12, 1, 0, 0, 0, 0));
-    var asdasdsa = m.GetScheduleForGroup("МХ-21-2");
+    await Console.Out.WriteLineAsync("-- test тест --");
 
-    Console.WriteLine(asdasdsa);
-    
-    Console.ReadKey(true);
+    var path = @"D:\Garbage\Downloads\2554file.pdf";
+    using var ms = new MemoryStream(await File.ReadAllBytesAsync(path));
+    var p = new PdfConverter(new System.Net.Http.HttpClient());
+    await Console.Out.WriteLineAsync(await p.Convert(ms));
 
     return EXIT_SUCCESS;
 }
 catch (Exception exc)
 {
-    Console.Error.WriteLine("-- Exception:");
-    Console.Error.WriteLine(exc);
-    Console.Error.WriteLine("-- Exception end.");
+    await Console.Error.WriteLineAsync("-- Exception:");
+    await Console.Error.WriteLineAsync(exc.ToString());
+    await Console.Error.WriteLineAsync("-- Exception end.");
+
+    if (Debugger.IsAttached)
+    {
+        throw;
+    }
+
     return EXIT_FAILURE;
 }

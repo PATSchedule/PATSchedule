@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -53,6 +54,7 @@ namespace PATBot
         const string NAME_HOMEWORK = "💼 Задания";
         const string NAME_ABOUTBOT = "🐯 О боте";
         const string NAME_CHANGEGR = "⚙️ Сменить группу";
+        const string NAME_EPOS = "🐻 ЭПОС";
 
         // 'Just Zoo It!' pack:
         const string NAME_PIGSTICKER = "CAACAgIAAxkBAAICfWF5bV4fOwncaPA-UIRE36ze22LnAALoAAP0exkAAcnMJRAtN9vTIQQ";
@@ -68,6 +70,7 @@ namespace PATBot
         {
             new KeyboardButton[]{ NAME_SCHEDULE },
             new KeyboardButton[]{ NAME_HOMEWORK },
+            new KeyboardButton[]{ NAME_EPOS     },
             new KeyboardButton[]{ NAME_ABOUTBOT },
             new KeyboardButton[]{ NAME_CHANGEGR }
         };
@@ -75,6 +78,13 @@ namespace PATBot
         static Random Rnd = new Random();
 
         static ReplyKeyboardMarkup MenuMarkup = new ReplyKeyboardMarkup(MenuButtons) { ResizeKeyboard = true, OneTimeKeyboard = true };
+
+        static InlineKeyboardMarkup EposMarkup = new InlineKeyboardMarkup(new InlineKeyboardButton[]
+                {
+                    InlineKeyboardButton.WithCallbackData("📅 Д/З ЭПОС", "eHw"),
+                    InlineKeyboardButton.WithCallbackData("💯 Оценки ЭПОС", "eGrades"),
+                    InlineKeyboardButton.WithCallbackData("❌ Выйти", "eDel"),
+                });
 
         static InlineKeyboardMarkup MoodleMarkupDelete = new InlineKeyboardMarkup(new InlineKeyboardButton[]
                 {
@@ -110,6 +120,63 @@ namespace PATBot
             public int page = -1;
             public DateTime startfrom = DateTime.Now;
             public List<MoodlePageInfo> pages = new List<MoodlePageInfo>();
+        }
+
+        static async Task<Tuple<string, InlineKeyboardMarkup?>> PrintEposInfo(string rsaagLogin, string rsaagPassword, string patuserid)
+        {
+            var sb = new StringBuilder();
+            InlineKeyboardMarkup? ikm = null;
+            var patsi = Students.GetUser(patuserid);
+            if (patsi is null)
+            {
+                throw new InvalidOperationException("User is null..?");
+            }
+
+            try
+            {
+                using var epos = new AntiEpos.AEClient();
+                await epos.Login(rsaagLogin, rsaagPassword);
+                await epos.CheckAgreement();
+                await epos.Authenticate(AntiEpos.AEAuthMode.Student);
+
+                var user = epos.UserInfo;
+
+                // ох...
+                if (user is null
+                    || user.Sessions is null
+                    || user.AcademicYears is null
+                    || user.AuthToken is null
+                    || user.Sessions.Profiles is null
+                    || user.Sessions.Profiles.Length <= 0
+                    )
+                    throw new InvalidOperationException("Недостаточно информации о пользователе");
+
+                var acyear = user.AcademicYears.Last();
+                var progress = await epos.FetchProgress(acyear.Id);
+
+                if (progress is null || progress.Length <= 0)
+                    throw new InvalidOperationException("Недостаточно информации об оценках");
+
+                var myprof = user.Sessions.Profiles.Where(x => x.IsDefault).FirstOrDefault();
+                if (myprof is null)
+                    throw new InvalidOperationException("Не назначен профиль по умолчанию");
+
+                sb.AppendLine($"Профиль ЭПОС по умолчанию:");
+                sb.AppendLine($"{user.Sessions.FirstName} {user.Sessions.LastName}");
+                sb.AppendLine($"{myprof.SchoolShortname}");
+                sb.AppendLine($"Текущий академ. год: {acyear.Id}|{acyear.Name}");
+                sb.AppendLine($"Сам ЭПОС, если что, здесь: https://school.permkrai.ru/desktop");
+
+                patsi.EposTag = new PATShared.EposTagClass() { Progress = progress };
+
+                ikm = EposMarkup;
+            }
+            catch (Exception exc)
+            {
+                sb.AppendLine("❌ Произошла ошибка получения данных из РСААГ:\n" + exc.ToString());
+            }
+
+            return Tuple.Create(sb.ToString(), ikm);
         }
 
         static async Task<Tuple<string, InlineKeyboardMarkup?>> PrintMoodleInfo(string moodletoken, string patuserid)
@@ -311,12 +378,6 @@ namespace PATBot
             var msgId = upd.Message.MessageId;
             var mydt = DateTime.Today;
 
-            if (cbuserid == "TG_1094694175")
-            {
-                await botClient.SendTextMessageAsync(chatId, NAME_BANNED, cancellationToken: cancellationToken);
-                return;
-            }
-
             if (cancellationToken.IsCancellationRequested)
             {
                 return;
@@ -325,33 +386,66 @@ namespace PATBot
             var myuser = Students.GetUser(cbuserid);
             var imr = GetDateMarkup();
 
-            var mystr = upd.Data;
+            var mystr = upd.Data ?? "";
 
             if (myuser is null)
             {
                 cberr = true;
                 msg += "Пользователь не найден. ";
             }
+            else if (!cberr && mystr.StartsWith('e'))
+            {
+                imr = EposMarkup;
+
+                if (myuser.EposTag is null)
+                {
+                    cberr = true;
+                    msg += "Нет тэга про ЭПОС. ";
+                }
+                else
+                {
+                    msg = "";
+                    switch (mystr)
+                    {
+                        case "eGrades":
+                            {
+                                foreach (var g in myuser.EposTag.Progress)
+                                {
+                                    msg += $"{g.SubjectName}(ср.={g.AverageFive}): ";
+                                    foreach (var periods in g.Periods)
+                                    {
+                                        foreach (var marks in periods.Marks)
+                                        {
+                                            foreach (var markvalues in marks.Values)
+                                            {
+                                                msg += $"{(int)markvalues.Five} ";
+                                            }
+                                        }
+                                    }
+
+                                    msg += "\n";
+                                }
+
+                                break;
+                            }
+
+                        case "eDel":
+                            {
+                                myuser.RsaagLogin = "";
+                                myuser.RsaagPassword = "";
+                                Students.SetUser(cbuserid, myuser);
+                                msg = "Ваши данные авторизации РСААГ были удалены, нажмите на кнопку ЭПОС ещё раз для авторизации.";
+                                imr = null;
+                                break;
+                            }
+                    }
+                }
+            }
             else if (!cberr && mystr.StartsWith('s'))
             {
                 mystr = mystr.Substring(1);
 
-                switch (mystr)
-                {
-                    case "-1.0": mydt = mydt.AddDays(-1.0); break;
-                    case "-2.0": mydt = mydt.AddDays(-2.0); break;
-                    case "-3.0": mydt = mydt.AddDays(-3.0); break;
-                    case "1.0": mydt = mydt.AddDays(1.0); break;
-                    case "2.0": mydt = mydt.AddDays(2.0); break;
-                    case "3.0": mydt = mydt.AddDays(3.0); break;
-                    case "0.0": break;
-                    default:
-                        {
-                            cberr = true;
-                            msg += "Неверно указан день. ";
-                            break;
-                        }
-                }
+                mydt.AddDays(double.Parse(mystr, CultureInfo.InvariantCulture));
 
                 if (mydt.DayOfWeek == DayOfWeek.Sunday)
                 {
@@ -583,12 +677,6 @@ namespace PATBot
             var userId = upd.From.Id;
             var patuserid = "TG_" + userId.ToString();
 
-            if (patuserid == "TG_1094694175")
-            {
-                await botClient.SendTextMessageAsync(chatId, NAME_BANNED, cancellationToken: cancellationToken);
-                return;
-            }
-
             if (cancellationToken.IsCancellationRequested)
             {
                 return;
@@ -657,6 +745,40 @@ namespace PATBot
                                 msg = $"Твоя текущая группа: {patsi.Group}\nПришли новую группу одним сообщением, как раньше.";
                                 Students.SetUser(patuserid, new PATShared.StudentInfo(""));
                                 replyKeyboardMarkup = RemoveKeyboard;
+                                break;
+                            }
+
+                        case NAME_EPOS:
+                            {
+                                if (patsi.RsaagLogin == "" || patsi.RsaagPassword == "" || patsi.RsaagLogin == "$!WAIT")
+                                {
+                                    msg = "🐻 РСААГ Авторизация (powered by AntiEpos!)\nПришлите ваш логин и пароль от РСААГ через пробел.\nПример:\nMoodle-Lucshe@po-faktam.ru parol123\nАвторизация через госуслуги НЕ работает, даже не просите.";
+                                    patsi.RsaagLogin = "$!WAIT";
+                                    Students.SetUser(patuserid, patsi);
+                                }
+                                else
+                                {
+                                    sendout = false;
+
+                                    var _msgwait = await botClient.SendTextMessageAsync(
+                                        chatId: chatId,
+                                        text: "⏲ РСААГ авторизация...",
+                                        cancellationToken: cancellationToken
+                                    );
+
+
+                                    var tt = await PrintEposInfo(patsi.RsaagLogin, patsi.RsaagPassword, patuserid);
+                                    msg = tt.Item1;
+
+                                    await botClient.EditMessageTextAsync(
+                                        _msgwait.Chat.Id,
+                                        _msgwait.MessageId,
+                                        text: msg,
+                                        parseMode: ParseMode.Markdown,
+                                        replyMarkup: tt.Item2,
+                                        cancellationToken: cancellationToken
+                                    );
+                                }
                                 break;
                             }
 
@@ -774,6 +896,33 @@ namespace PATBot
                                     catch (Exception exc)
                                     {
                                         msg = $"❌ Произошла ошибка авторизации Moodle, свяжитесь с автором бота:\n{exc}";
+                                    }
+                                }
+                                else if (patsi.RsaagLogin == "$!WAIT")
+                                {
+                                    try
+                                    {
+                                        var mmessage = chatTxt.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                                        if (mmessage.Length != 2)
+                                        {
+                                            throw new InvalidOperationException("Нет либо логина, либо пароля.");
+                                        }
+
+                                        using var epos = new AntiEpos.AEClient();
+                                        await epos.Login(mmessage[0], mmessage[1]);
+                                        var agreementdat = await epos.CheckAgreement();
+                                        if (!agreementdat.Status || agreementdat.Data is null || !agreementdat.Data.AgreedUser)
+                                            throw new InvalidOperationException("Вы не согласились на обработку данных в РСААГ!");
+
+                                        patsi.RsaagLogin = mmessage[0];
+                                        patsi.RsaagPassword = mmessage[1];
+                                        Students.SetUser(patuserid, patsi);
+
+                                        msg = "✅ Успешно, удалите сообщение с логином и паролем и нажмите на кнопку ещё раз. Если вы остановите диалог с ботом то ваши данные авторизации будут удалены.";
+                                    }
+                                    catch (Exception exc)
+                                    {
+                                        msg = $"❌ Произошла ошибка авторизации в РСААГ, свяжитесь с автором бота:\n{exc}";
                                     }
                                 }
                                 else

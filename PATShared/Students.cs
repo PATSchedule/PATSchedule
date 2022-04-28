@@ -16,10 +16,17 @@ namespace PATShared
         // используется для навигации по moodle.
         public object? Tag { get; set; }
 
-        public StudentInfo(string group = "", string moodletoken = "")
+        public EposTagClass? EposTag { get; set; }
+
+        public string RsaagLogin { get; set; }
+        public string RsaagPassword { get; set; }
+
+        public StudentInfo(string group = "", string moodletoken = "", string rsaagLogin = "", string rsaagPassword = "")
         {
             Group = group;
             MoodleToken = moodletoken;
+            RsaagLogin = rsaagLogin;
+            RsaagPassword = rsaagPassword;
         }
 
         public StudentInfo(StudentInfo _other)
@@ -27,6 +34,9 @@ namespace PATShared
             Group = _other.Group;
             MoodleToken = _other.MoodleToken;
             Tag = _other.Tag;
+            EposTag = _other.EposTag;
+            RsaagLogin = _other.RsaagLogin;
+            RsaagPassword = _other.RsaagPassword;
         }
     }
 
@@ -64,10 +74,25 @@ namespace PATShared
 
                     StringBuilder sb = new StringBuilder();
 
-                    sb.AppendFormat("{0}{1}{2}{3}", "# PATSchedule user database, DO NOT EDIT, string format:", "\n", "# {id}_{user}={group};{moodletoken};{...}", "\n");
+                    sb.AppendFormat(
+                        "{0}{1}{2}{3}",
+                        "# PATSchedule user database, DO NOT EDIT, string format:",
+                        "\n",
+                        "# {TG/VK}_{user}={group};{moodletoken};{rsaagLogin};{rsaagPassword};",
+                        "\n");
+
                     foreach (var kvp in Users)
                     {
-                        sb.AppendFormat("{0}={1};{2};{3}", kvp.Key, kvp.Value.Group, kvp.Value.MoodleToken, /*, ... */ "\n");
+                        sb.AppendFormat(
+                            "{0}={1};{2};{3};{4};{5}",
+                            kvp.Key,
+                            kvp.Value.Group,
+                            kvp.Value.MoodleToken,
+                            kvp.Value.RsaagLogin,
+                            kvp.Value.RsaagPassword,
+                            /*, ... */
+
+                            "\n");
                     }
 
                     towrite = sb.ToString();
@@ -154,7 +179,9 @@ namespace PATShared
 
                     Users[key] = new StudentInfo(
                         (values.Length > 0) ? values[0] : "",
-                        (values.Length > 1) ? values[1] : ""
+                        (values.Length > 1) ? values[1] : "",
+                        (values.Length > 2) ? values[2] : "",
+                        (values.Length > 3) ? values[3] : ""
                         /*, ...*/
                     );
                 }

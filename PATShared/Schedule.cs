@@ -355,7 +355,7 @@ namespace PATShared
 
         async Task<IDictionary<string, IList<SingleReplacement>>> FetchWeirdXls(string url)
         {
-            // либо берём из кэша cache[ссылка] = byte[], либо скачиваем
+            // скачиваем с сайта
             var _xls = await client.GetByteArrayAsync(url);
             using var _ms = new MemoryStream(_xls);
             var d = new Dictionary<string, IList<SingleReplacement>>();
@@ -384,8 +384,8 @@ namespace PATShared
             var _NUMBERSC = int.MinValue;
             while (true)
             {
-                var thevalue = getcellv(getcell(sheet, _START));
-                if (!thevalue.Trim().Contains("День недели"))
+                var thevalue = getcellv(getcell(sheet, _START)).Replace("\r\n", "\n").Replace("\n", " ").Trim();
+                if (!thevalue.Contains("День нед"))
                 {
                     _START = movecell(_START, 1, 0);
                     continue;
@@ -393,10 +393,10 @@ namespace PATShared
 
                 while (true)
                 {
-                    thevalue = getcellv(getcell(sheet, _START));
+                    thevalue = getcellv(getcell(sheet, _START)).Replace("\r\n", "\n").Replace("\n", " ").Trim();
                     _NUMBERSC = _START.Column;
                     _START = movecell(_START, 0, 1);
-                    if (thevalue.Trim().Contains("№ пары"))
+                    if (thevalue.Contains("№ па"))
                     {
                         break;
                     }
@@ -423,14 +423,14 @@ namespace PATShared
                     continue;
                 }
 
-                _groupname = _groupname.Trim().Replace("\r\n", "").Replace("\n", "").Replace(" ", "-").ToUpper(my_culture);
+                _groupname = _groupname.Replace("\r\n", "").Replace("\n", "").Trim().Replace(" ", "-").ToUpper(my_culture);
                 var lst = new List<SingleReplacement>();
                 var _LESSONADDR = movecell(_SHEETPOS, 1, 0);
                 //await Console.Out.WriteLineAsync($"Processing group {_groupname}");
                 while (true)
                 {
                     var _lessonstring = getcellv(getcell(sheet, new NPOI.SS.Util.CellAddress(_LESSONADDR.Row, _NUMBERSC)));
-                    _lessonstring = _lessonstring.Trim().Replace("\r\n", "").Replace("\n", "").Trim();
+                    _lessonstring = _lessonstring.Replace("\r\n", "").Replace("\n", "").Trim();
                     // да блять, тут проблема с парой 5 и больше
 
                     var _parseok = int.TryParse(_lessonstring, out int i);
@@ -445,8 +445,8 @@ namespace PATShared
                     var _teachername = getcellv(getcell(sheet, _LESSONADDR));
                     _LESSONADDR = movecell(_LESSONADDR, 1, 0);
 
-                    _subjectname = _subjectname.Trim().Replace("\r\n", "").Replace("\n", "");
-                    _teachername = _teachername.Trim().Replace("\r\n", "").Replace("\n", "");
+                    _subjectname = _subjectname.Replace("\r\n", "").Replace("\n", "").Trim();
+                    _teachername = _teachername.Replace("\r\n", "").Replace("\n", "").Trim();
                     if (string.IsNullOrWhiteSpace(_subjectname))
                     {
                         continue;
@@ -464,7 +464,7 @@ namespace PATShared
                     if (!string.IsNullOrWhiteSpace(lst[i].Room))
                     {
                         // 'А-1??'
-                        knownroom = lst[i].Room[0] + "-1??";
+                        knownroom = lst[i].Room[0] + "-11?";
                         break;
                     }
                 }
@@ -500,6 +500,17 @@ namespace PATShared
             }
 
             return d;
+        }
+
+        async Task<IDictionary<string, IList<SingleReplacement>>> FetchPdf(string url)
+        {
+            var _pdf = await client.GetByteArrayAsync(url);
+            using var _ms = new MemoryStream(_pdf);
+
+            // -- ещё более ужасный и страшный кошмар начинается -- //
+
+
+            throw new Exception("извините :(");
         }
 
         async Task<IDictionary<string, IList<SingleReplacement>>> FetchOne(string url)
@@ -705,125 +716,129 @@ namespace PATShared
 
         public async Task FetchSchedule(DateTime origindate)
         {
-            try
+            lock (Cache)
             {
-                lock (Cache)
+                var hascached = false;
+                var tocleanup = new List<DateTime>();
+                // смотрим сначала есть ли наш искомый элемент в кэше, ЛИБО (!!!)
+                // если есть какие-то очень очень старые записи то помечаем их на удаление...
+                foreach (var item in Cache)
                 {
-                    var hascached = false;
-                    var tocleanup = new List<DateTime>();
-                    // смотрим сначала есть ли наш искомый элемент в кэше, ЛИБО (!!!)
-                    // если есть какие-то очень очень старые записи то помечаем их на удаление...
-                    foreach (var item in Cache)
+                    // сначала if date == key, чтобы случайно не удалить нужную кэшированую запись
+                    if (origindate == item.Key)
                     {
-                        // сначала if date == key, чтобы случайно не удалить нужную кэшированую запись
-                        if (origindate == item.Key)
-                        {
-                            hascached = true;
-                        }
-                        else if ((DateTime.Now - item.Key).Days > 10)
-                        {
-                            // потом уже проверяем нужно ли удалить
-                            tocleanup.Add(item.Key);
-                        }
+                        hascached = true;
                     }
-
-                    foreach (var item in tocleanup)
+                    else if ((DateTime.Now - item.Key).Days > 10)
                     {
-                        Console.WriteLine($"Removing very old cache entry {item:dd MM yyyy}");
-                        Cache.Remove(item);
-                    }
-
-                    if (hascached)
-                    {
-                        var cacheentry = Cache[origindate];
-                        MySchedule = cacheentry.Data;
-
-                        // проставить ссылку на файл из которого был сделан кэш, если ссылка есть конечно
-                        if (!string.IsNullOrWhiteSpace(cacheentry.FileUrl))
-                        {
-                            ReplacementsUsed = true;
-                            ReplacementUrl = cacheentry.FileUrl;
-                            ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
-                        }
-
-                        return;
+                        // потом уже проверяем нужно ли удалить
+                        tocleanup.Add(item.Key);
                     }
                 }
 
-                var bcfg = Configuration.Default
-                    .WithDefaultLoader()
-                    .WithDefaultCookies()
-                    .WithMetaRefresh()
-                    .WithLocaleBasedEncoding()
-                    .WithCulture(my_culture);
-
-                using var context = BrowsingContext.New(bcfg);
-                using var document = await context.OpenAsync(repl_uri);
-
-                var files = document.GetElementsByClassName("file_tree")[0].GetElementsByClassName("file_link");
-
-                ReplacementsUsed = false;
-
-                if (files.Length < 0) return;
-                foreach (var e in files)
+                foreach (var item in tocleanup)
                 {
-                    if (e.Children.Length < 1) continue;
-                    foreach (var ee in e.Children.Reverse())
+                    Console.WriteLine($"Removing very old cache entry {item:dd MM yyyy}");
+                    Cache.Remove(item);
+                }
+
+                if (hascached)
+                {
+                    var cacheentry = Cache[origindate];
+                    MySchedule = cacheentry.Data;
+
+                    // проставить ссылку на файл из которого был сделан кэш, если ссылка есть конечно
+                    if (!string.IsNullOrWhiteSpace(cacheentry.FileUrl))
                     {
-                        if (ee.Children.Length < 1) continue;
-                        foreach (var eee in ee.Children.Reverse())
-                        {
-                            if (eee is IHtmlAnchorElement ihae)
-                            {
-                                // href относителен, и AngleSharp думает что оно на локалхост указывает...
-                                var actualurl = ihae.Href.Replace("http://localhost", "https://permaviat.ru");
-                                var date = ParseName(ihae.Text);
-
-                                // пару раз там учебная часть выложила замены в .PDF
-                                if (DateTime.Compare(date, origindate) != 0) continue;
-
-                                // ставим флажок что замены найдены
-                                ReplacementsUsed = true;
-                                ReplacementUrl = actualurl;
-                                ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
-
-                                // скачиваем замену:
-                                if (ReplacementFile.EndsWith(".docx"))
-                                {
-                                    await FetchExcels(origindate); // fetch base schedule
-                                    var docxreplacement = await FetchOne(actualurl);
-                                    MySchedule = Merge(MySchedule, docxreplacement);
-
-                                    lock (Cache)
-                                    {
-                                        Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
-                                    }
-                                }
-                                else if (ReplacementFile.EndsWith(".xls") || ReplacementFile.EndsWith(".xlsx"))
-                                {
-                                    var xlsxreplacement = await FetchWeirdXls(actualurl);
-                                    // здесь без Merge()...
-                                    MySchedule = xlsxreplacement;
-
-                                    lock (Cache)
-                                    {
-                                        Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
-                                    }
-                                }
-                                else
-                                {
-                                    throw new InvalidDataException("Replacement file has an invalid data type, " + ReplacementFile);
-                                }
-
-                                return;
-                            }
-                        }
+                        ReplacementsUsed = true;
+                        ReplacementUrl = cacheentry.FileUrl;
+                        ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
                     }
+
+                    return;
                 }
             }
-            catch (Exception exc)
+
+            var bcfg = Configuration.Default
+                .WithDefaultLoader()
+                .WithDefaultCookies()
+                .WithMetaRefresh()
+                .WithLocaleBasedEncoding()
+                .WithCulture(my_culture);
+
+            using var context = BrowsingContext.New(bcfg);
+            using var document = await context.OpenAsync(repl_uri);
+
+            var files = document.GetElementsByClassName("file_tree")[0].GetElementsByClassName("file_link");
+
+            ReplacementsUsed = false;
+
+            if (files.Length < 0) return;
+            foreach (var e in files)
             {
-                Console.WriteLine($"Unable to fetch replacements: {exc}");
+                if (e.Children.Length < 1) continue;
+                foreach (var ee in e.Children.Reverse())
+                {
+                    if (ee.Children.Length < 1) continue;
+                    foreach (var eee in ee.Children.Reverse())
+                    {
+                        if (eee is IHtmlAnchorElement ihae)
+                        {
+                            // href относителен, и AngleSharp думает что оно на локалхост указывает...
+                            var actualurl = ihae.Href.Replace("http://localhost", "https://permaviat.ru");
+                            var date = ParseName(ihae.Text);
+
+                            // пару раз там учебная часть выложила замены в .PDF
+                            if (DateTime.Compare(date, origindate) != 0) continue;
+
+                            // ставим флажок что замены найдены
+                            ReplacementsUsed = true;
+                            ReplacementUrl = actualurl;
+                            ReplacementFile = new Uri(ReplacementUrl).Segments.Last();
+
+                            // скачиваем замену:
+                            if (ReplacementFile.EndsWith(".docx"))
+                            {
+                                await FetchExcels(origindate); // fetch base schedule
+                                var docxreplacement = await FetchOne(actualurl);
+                                MySchedule = Merge(MySchedule, docxreplacement);
+
+                                lock (Cache)
+                                {
+                                    Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
+                                }
+                            }
+                            else if (ReplacementFile.EndsWith(".xls") || ReplacementFile.EndsWith(".xlsx"))
+                            {
+                                var xlsxreplacement = await FetchWeirdXls(actualurl);
+                                // здесь без Merge()...
+                                MySchedule = xlsxreplacement;
+
+                                lock (Cache)
+                                {
+                                    Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
+                                }
+                            }
+                            else if (ReplacementFile.EndsWith(".pdf"))
+                            {
+                                var pdfreplacement = await FetchPdf(actualurl);
+                                MySchedule = pdfreplacement;
+
+                                lock (Cache)
+                                {
+                                    Cache[origindate] = new CacheEntry(ReplacementUrl, MySchedule);
+                                }
+                            }
+                            else
+                            {
+                                // не docx/xls/xlsx/pdf/...??? что ты такое o_O
+                                throw new InvalidDataException("Replacement file has an invalid data type, " + ReplacementFile);
+                            }
+
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
