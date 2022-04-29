@@ -127,7 +127,7 @@ namespace PATBot
             var sb = new StringBuilder();
             InlineKeyboardMarkup? ikm = null;
             var patsi = Students.GetUser(patuserid);
-            if (patsi is null)
+            if (patsi is null || patsi.RsaagPassword is null)
             {
                 throw new InvalidOperationException("User is null..?");
             }
@@ -135,8 +135,7 @@ namespace PATBot
             try
             {
                 using var epos = new AntiEpos.AEClient();
-                await epos.Login(rsaagLogin, rsaagPassword);
-                await epos.CheckAgreement();
+                await PATShared.EposTagClass.EnsureEposAuth(epos, rsaagLogin, rsaagPassword);
                 await epos.Authenticate(AntiEpos.AEAuthMode.Student);
 
                 var user = epos.UserInfo;
@@ -151,9 +150,11 @@ namespace PATBot
                     )
                     throw new InvalidOperationException("Недостаточно информации о пользователе");
 
-                var acyear = user.AcademicYears.Last();
-                var progress = await epos.FetchProgress(acyear.Id);
+                var acyear = user.AcademicYears.LastOrDefault();
+                if (acyear is null)
+                    throw new InvalidOperationException("Нет академических годов");
 
+                var progress = await epos.FetchProgress(acyear.Id);
                 if (progress is null || progress.Length <= 0)
                     throw new InvalidOperationException("Недостаточно информации об оценках");
 
@@ -399,10 +400,17 @@ namespace PATBot
 
                 if (myuser.EposTag is null)
                 {
-                    cberr = true;
-                    msg += "Нет тэга про ЭПОС. ";
+                    if (myuser.RsaagPassword != "")
+                        await PrintEposInfo(myuser.RsaagLogin, myuser.RsaagPassword, cbuserid); // создаст тэг
+                    else
+                    {
+                        imr = null;
+                        cberr = true;
+                        msg += "Нет данных авторизации РСААГ. Войдите снова ";
+                    }
                 }
-                else
+
+                //else
                 {
                     msg = "";
                     switch (mystr)
@@ -434,7 +442,7 @@ namespace PATBot
                                 myuser.RsaagLogin = "";
                                 myuser.RsaagPassword = "";
                                 Students.SetUser(cbuserid, myuser);
-                                msg = "Ваши данные авторизации РСААГ были удалены, нажмите на кнопку ЭПОС ещё раз для авторизации.";
+                                msg = "🗑 Ваши данные авторизации РСААГ были удалены, нажмите на кнопку ЭПОС ещё раз для авторизации.";
                                 imr = null;
                                 break;
                             }
@@ -765,7 +773,6 @@ namespace PATBot
                                         text: "⏲ РСААГ авторизация...",
                                         cancellationToken: cancellationToken
                                     );
-
 
                                     var tt = await PrintEposInfo(patsi.RsaagLogin, patsi.RsaagPassword, patuserid);
                                     msg = tt.Item1;
